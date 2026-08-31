@@ -35,7 +35,7 @@ app_password = st.sidebar.text_input("App Password", type="password")
 
 # Google Sheets Configuration
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SHEET_ID = 12MZ5Toba274TUyQV9Zjrixcsl0qNO5mA-ApJv2woQ64 # Make sure to put your real Sheet ID here again!
+SHEET_ID = "12MZ5Toba274TUyQV9Zjrixcsl0qNO5mA-ApJv2woQ64" # Make sure to put your real Sheet ID here again!
 
 # ==========================================
 # 3. HELPER FUNCTIONS
