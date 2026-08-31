@@ -2,12 +2,18 @@ name: Fellowship Weekly Automation
 
 on:
   schedule:
-    # 06:00 UTC is exactly 09:00 AM Baghdad time
-    # Runs at 9:00 AM every Sunday (0)
     - cron: '0 6 * * 0'
-    # Runs at 9:00 AM every Monday (1)
     - cron: '0 6 * * 1'
-  workflow_dispatch: # This line allows you to trigger it manually for testing!
+  workflow_dispatch:
+    inputs:
+      day_to_test:
+        description: 'Which script do you want to manually test?'
+        required: true
+        default: 'Sunday'
+        type: choice
+        options:
+          - Sunday
+          - Monday
 
 jobs:
   run-scripts:
@@ -26,7 +32,7 @@ jobs:
           pip install pandas gspread oauth2client pytz
 
       - name: Run Sunday Script
-        if: github.event.schedule == '0 6 * * 0'
+        if: github.event.schedule == '0 6 * * 0' || github.event.inputs.day_to_test == 'Sunday'
         env:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
@@ -34,7 +40,7 @@ jobs:
         run: python sunday.py
 
       - name: Run Monday Script
-        if: github.event.schedule == '0 6 * * 1'
+        if: github.event.schedule == '0 6 * * 1' || github.event.inputs.day_to_test == 'Monday'
         env:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
