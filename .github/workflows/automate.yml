@@ -1,0 +1,42 @@
+name: Fellowship Weekly Automation
+
+on:
+  schedule:
+    # 06:00 UTC is exactly 09:00 AM Baghdad time
+    # Runs at 9:00 AM every Sunday (0)
+    - cron: '0 6 * * 0'
+    # Runs at 9:00 AM every Monday (1)
+    - cron: '0 6 * * 1'
+  workflow_dispatch: # This line allows you to trigger it manually for testing!
+
+jobs:
+  run-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install pandas gspread oauth2client pytz
+
+      - name: Run Sunday Script
+        if: github.event.schedule == '0 6 * * 0'
+        env:
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        run: python sunday.py
+
+      - name: Run Monday Script
+        if: github.event.schedule == '0 6 * * 1'
+        env:
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        run: python monday.py
