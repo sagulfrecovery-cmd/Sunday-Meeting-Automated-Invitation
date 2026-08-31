@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import pytz
 import smtplib
 from email.mime.text import MIMEText
+import json
 
 # ==========================================
 # 1. PAGE CONFIGURATION & SETUP
@@ -19,7 +20,6 @@ st.markdown("Manage your Sunday meeting invites and Monday attendance warnings d
 # 2. DYNAMIC ADMIN SETTINGS (SIDEBAR)
 # ==========================================
 st.sidebar.header("🔗 Form Links")
-# Pre-loaded with your exact forms, but editable on the fly!
 check_in_link = st.sidebar.text_input("Check-In Form Link", value="https://docs.google.com/forms/d/e/1FAIpQLSdmR68FNIuninImccaVODpR8QWNeec5VAHyv7AN3nrMSYlmqg/viewform?usp=sharing&ouid=117963799738843870003")
 registration_link = st.sidebar.text_input("Registration Form Link", value="https://docs.google.com/forms/d/e/1FAIpQLSdswI0lkVllYOB7bD-VuYiTnxtiuO-MM3e22iDU5MD9PhT-pQ/viewform?usp=sharing&ouid=117963799738843870003")
 
@@ -35,14 +35,16 @@ app_password = st.sidebar.text_input("App Password", type="password")
 
 # Google Sheets Configuration
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SHEET_ID = 12MZ5Toba274TUyQV9Zjrixcsl0qNO5mA-ApJv2woQ64 # Replace with your actual Sheet ID
+SHEET_ID = 12MZ5Toba274TUyQV9Zjrixcsl0qNO5mA-ApJv2woQ64 # Make sure to put your real Sheet ID here again!
 
 # ==========================================
 # 3. HELPER FUNCTIONS
 # ==========================================
 @st.cache_resource
 def connect_to_sheets():
-    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPES)
+    # THIS IS THE FIX: We load the string as JSON first
+    creds_dict = json.loads(st.secrets["gcp_service_account"])
+    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     client = gspread.authorize(creds)
     return client.open_by_key(SHEET_ID)
 
@@ -123,7 +125,6 @@ if st.button("Generate & Send Sunday Invites"):
 
         dynamic_times = get_dynamic_timezones(raw_date)
         
-        # INJECTED THE LINKS INTO THE MESSAGE BODY HERE
         message_body = f"""👨🏻‍💻👩🏻‍💻 يـرجـى قـــراءة ا لاعـــلان جــيــدا
 
                    تـــدعـــوكــــم  
