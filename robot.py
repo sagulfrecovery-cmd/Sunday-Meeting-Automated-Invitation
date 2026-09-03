@@ -42,7 +42,6 @@ print(f"🤖 استيقظ الروبوت... اليوم: {today_name} | الأم�
 
 # --- HELPER FUNCTIONS ---
 def get_safe_absences(row):
-    """دالة مضادة للأخطاء لقراءة الغيابات حتى لو كانت الخلية فارغة"""
     raw_abs = row.get('Absences', row.get('الغيابات', 0))
     try:
         return int(float(raw_abs))
@@ -75,6 +74,21 @@ def create_draft(subject, body, emails, invite_method, is_html=False):
     except Exception as e:
         print(f"❌ فشل في إنشاء المسودة: {e}")
 
+def send_admin_report(subject, html_body, to_emails):
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = subject
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = to_emails
+    msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+    try:
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login(SENDER_EMAIL, APP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        print(f"📧 تم إرسال تقرير الإدارة بنجاح إلى: {to_emails}")
+    except Exception as e:
+        print(f"❌ فشل في إرسال تقرير الإدارة: {e}")
+
 # --- MAIN LOGIC ---
 def run_robot():
     master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
@@ -98,16 +112,25 @@ def run_robot():
         reg_df = pd.DataFrame(reg_tab.get_all_records())
         
         valid_emails = []
+        removed_emails = []
+        warned_emails = []
+        
         for index, row in reg_df.iterrows():
+            email = str(row.iloc[1]).strip().lower()
+            if not email: continue
+            
             absences = get_safe_absences(row)
-            if absences < max_abs:
-                valid_emails.append(str(row.iloc[1]).strip().lower())
+            if absences >= max_abs:
+                removed_emails.append(email)
+            else:
+                valid_emails.append(email)
+                if absences > 0:
+                    warned_emails.append(email)
                 
         if valid_emails:
             worksheet_names = [ws.title for ws in target_db.worksheets()]
             
             if "اجتماع اليوم" in worksheet_names:
-                print("📝 استخدام القالب النصي (اجتماع اليوم)...")
                 try:
                     sun_tab = target_db.worksheet("اجتماع اليوم")
                     meeting_topic = sun_tab.acell('F9').value or "موضوع غير محدد"
@@ -125,13 +148,10 @@ def run_robot():
                     loc_time = meet_dt.astimezone(pytz.timezone(tz_name)).strftime("%I:%M%p").upper().lstrip('0')
                     dyn_time += f"{loc_time} -- {en_name}/{ar_name}\n"
                     
-                # -- التعديل الجديد لقالب يوم الأحد --
                 body = f"👨🏻‍💻👩🏻‍💻 يـرجـى قـــراءة ا لاعـــلان جــيــدا\n\n                   تـــدعـــوكــــم  \n      ༺☆» زمـــالــة الـــخــلـــيـــج »☆༻ \n\n    «☆«☆«☆«☆📖📚📖☆ »☆»☆»☆»\n\n🌅 الـيـوم :- {today_name}\n🗓 الـتـاريـخ :- {display_date}\n\n✍🏼نـوع الاجـتمـاع:- قـــراءه مـــن\n\n  \n🔵🔷🔹📖 {meeting_topic} 🔹🔷🔵\n\n\n🙋🏻‍♀️🙋🏻 تــنــبــيــه هــام :-\nالـحـضـوره فـقـط وحـصـرا لاعـضـاء مـجـمـوعـة زمـالـة الـخـلـيـج الام\n\n༺»مدة الأجـتـمـاع:- 70 دقيقة«༻\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n📟 بداية وقت الاجتماع \n📟 Meeting Start Time\n\nالوقت/Time\n{dyn_time.strip()}\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n1- سيتم نشر رابط الاجتماع على مجموعات زمالة الخليج حصرا قبل «15 دقيقه» من بداية الاجتماع\n2- سـيــتـم غــلــق الـغـرفــة بـعـد «20 دقيقة» من بدء الاجتماع\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n🔗 رابط تسجيل الدخول للاجتماع (البوابة):\n{PORTAL_LINK}\n\nبـأنـتـظـار حضوركم  !\nنـحــن بـالـفــعـل نـتـعـافـى 🙏🏼"
-                
                 create_draft("اعلان اجتماع الخليج", body, valid_emails, invite_method, is_html=False)
 
             elif "Meetings" in worksheet_names:
-                print("🎨 استخدام قالب HTML (Meetings)...")
                 meeting_topic = "موضوع غير محدد"
                 try:
                     meet_tab = target_db.worksheet("Meetings")
@@ -142,7 +162,6 @@ def run_robot():
                 except:
                     pass
 
-                # -- التعديل الجديد لقالب يوم الأربعاء --
                 body_html = f"""<div dir="rtl" style="text-align: right; font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6;">
                   ༺ يرجى قراءة الإعلان جيدًا ༻<br><br>
                   تدعوكم ༺ زمالة الخليج ༻ إلى اجتماع اليوم: <b>{meeting_topic}</b><br>
@@ -161,10 +180,29 @@ def run_robot():
                 batch_size = 45
                 for i in range(0, len(valid_emails), batch_size):
                     create_draft(f"دعوة زمالة الخليج - {today_str}", body_html, valid_emails[i:i+batch_size], invite_method, is_html=True)
-        else:
-            print("⚠️ لا يوجد أشخاص مؤهلين لاستلام الدعوة.")
-    else:
-        print(f"💤 لا يوجد اجتماع مبرمج لليوم ({today_name}).")
+            
+            # --- 📨 تقرير الإدارة 1: دعوة الاجتماع ---
+            admin_subject_1 = f"📊 تقرير إنشاء مسودات دعوات زمالة الخليج - {today_str}"
+            admin_emails_1 = "ameermam.sa@gmail.com, keepcomingback.29@gmail.com, sagulf.recovery@gmail.com"
+            
+            html_list = lambda lst: "".join([f"<li>{e}</li>" for e in sorted(lst)]) if lst else "<li>لا يوجد</li>"
+            
+            admin_body_1 = f"""
+            <div dir="rtl" style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6;">
+                <h3>✅ تم تجهيز مسودات الدعوات بنجاح!</h3>
+                <p>تم إعداد المسودات في حساب الإيميل، يرجى مراجعتها وإرسالها.</p>
+                <hr>
+                <h4 style="color: #2e7d32;">📩 قائمة المستلمين المعتمدين للدعوة ({len(valid_emails)} شخص):</h4>
+                <ul>{html_list(valid_emails)}</ul>
+                
+                <h4 style="color: #f57c00;">⚠️ أشخاص عليهم إنذارات (غياب 1 إلى {max_abs - 1}) ({len(warned_emails)} شخص):</h4>
+                <ul>{html_list(warned_emails)}</ul>
+                
+                <h4 style="color: #c62828;">🚫 أشخاص تم حذفهم واستبعادهم (تجاوزوا الحد الأقصى) ({len(removed_emails)} شخص):</h4>
+                <ul>{html_list(removed_emails)}</ul>
+            </div>
+            """
+            send_admin_report(admin_subject_1, admin_body_1, admin_emails_1)
 
     # ==========================================
     # 2. YESTERDAY'S LOGIC (GENTLE NOTICES AS DRAFTS)
@@ -186,25 +224,56 @@ def run_robot():
             yesterday_attendees = []
 
         absent_emails = []
+        removed_emails_yest = []
+        warned_emails_yest = []
+        
         for index, row in reg_df.iterrows():
             email = str(row.iloc[1]).strip().lower()
-            absences = get_safe_absences(row)
+            if not email: continue
             
-            if email not in yesterday_attendees and absences < max_abs:
-                absent_emails.append(email)
+            absences = get_safe_absences(row)
+            if absences >= max_abs:
+                removed_emails_yest.append(email)
+            else:
+                if absences > 0:
+                    warned_emails_yest.append(email)
+                if email not in yesterday_attendees:
+                    absent_emails.append(email)
 
         if absent_emails:
-            print(f"⚠️ تم رصد {len(absent_emails)} غياب. جاري إنشاء مسودة التنبيه (BCC)...")
+            print(f"⚠️ تم رصد {len(absent_emails)} غياب. جاري إنشاء مسودة التنبيه...")
             notice_subject = "نفتقدك في زمالة الخليج"
             notice_body = f"مرحباً،\n\nلاحظنا عدم حضورك لاجتماع يوم {yesterday_name}، ونتمنى أن تكون بخير.\nنفتقد تواجدك معنا، ونتطلع لرؤيتك قريباً.\n\nنحن بالفعل نتعافى!"
             
             batch_size = 45
             for i in range(0, len(absent_emails), batch_size):
                 create_draft(notice_subject, notice_body, absent_emails[i:i+batch_size], "BCC", is_html=False)
+            
+            # --- 📨 تقرير الإدارة 2: تنبيه الغيابات ---
+            admin_subject_2 = f"📊 تقرير مسودات تنبيه الغياب لاجتماع {yesterday_name}"
+            admin_emails_2 = "sagulf.recovery@gmail.com"
+            
+            html_list = lambda lst: "".join([f"<li>{e}</li>" for e in sorted(lst)]) if lst else "<li>لا يوجد</li>"
+            
+            admin_body_2 = f"""
+            <div dir="rtl" style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6;">
+                <h3>⚠️ تم تجهيز مسودات التنبيه للمتغيبين بنجاح!</h3>
+                <p>تم إعداد مسودة مخفية (BCC) في حساب الإيميل، يرجى مراجعتها وإرسالها.</p>
+                <hr>
+                <h4 style="color: #1565c0;">📩 قائمة المتغيبين الموجه لهم التنبيه ({len(absent_emails)} شخص):</h4>
+                <ul>{html_list(absent_emails)}</ul>
+                
+                <h4 style="color: #f57c00;">⚠️ إجمالي الأعضاء المنذرين في النظام (غياب 1 إلى {max_abs - 1}) ({len(warned_emails_yest)} شخص):</h4>
+                <ul>{html_list(warned_emails_yest)}</ul>
+                
+                <h4 style="color: #c62828;">🚫 أشخاص محذوفون لا يتم إرسال التنبيه لهم (تجاوزوا الحد الأقصى) ({len(removed_emails_yest)} شخص):</h4>
+                <ul>{html_list(removed_emails_yest)}</ul>
+            </div>
+            """
+            send_admin_report(admin_subject_2, admin_body_2, admin_emails_2)
+
         else:
-            print("✅ لا توجد غيابات تستحق التنبيه (الجميع حضر أو وصلوا للحد الأقصى).")
-    else:
-        print(f"💤 لم يكن هناك اجتماع مبرمج بالأمس ({yesterday_name}).")
+            print("✅ لا توجد غيابات تستحق التنبيه.")
 
 if __name__ == "__main__":
     run_robot()
