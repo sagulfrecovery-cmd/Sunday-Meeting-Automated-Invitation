@@ -16,6 +16,8 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 @st.cache_resource
 def get_google_client():
     creds_dict = json.loads(st.secrets["gcp_service_account"])
+    # This magic line forces the security key into the perfect format, preventing MalformedFraming:
+    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
