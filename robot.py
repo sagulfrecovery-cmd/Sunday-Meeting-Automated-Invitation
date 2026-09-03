@@ -95,7 +95,8 @@ def run_robot():
         # يفترض الكود وجود عمود اسمه "Absences" أو "الغيابات" يحسب عدد الغيابات. إذا لم يوجد، سيعتبر الغياب 0
         valid_emails = []
         for index, row in reg_df.iterrows():
-            absences = int(row.get('Absences', row.get('الغيابات', 0)))
+            raw_abs = row.get('Absences', row.get('الغيابات', 0))
+absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
             if absences < max_abs:
                 valid_emails.append(str(row.iloc[1]).strip().lower())
         
