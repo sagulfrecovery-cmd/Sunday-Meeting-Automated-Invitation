@@ -63,23 +63,6 @@ def create_draft(subject, body, emails, invite_method, is_html=False):
     except Exception as e:
         print(f"Failed to create draft: {e}")
 
-def send_gentle_notice(email_address, meeting_day):
-    subject = "نفتقدك في زمالة الخليج"
-    body = f"مرحباً،\n\nلاحظنا عدم حضورك لاجتماع يوم {meeting_day}، ونتمنى أن تكون بخير وبأفضل حال.\nنفتقد تواجدك معنا، ونتطلع لرؤيتك في الاجتماع القادم.\n\nنحن بالفعل نتعافى!"
-    msg = MIMEText(body, 'plain', 'utf-8')
-    msg['Subject'] = subject
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = email_address
-
-    try:
-        #server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        #server.login(SENDER_EMAIL, APP_PASSWORD)
-        #server.send_message(msg)
-        #server.quit()
-        print(f"Gentle notice sent to {email_address}")
-    except Exception as e:
-        print(f"Failed to send notice to {email_address}: {e}")
-
 # --- MAIN LOGIC ---
 def run_robot():
     master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
@@ -230,8 +213,8 @@ def run_robot():
                     draft_subj = subject if len(valid_emails) <= batch_size else f"{subject} (Part {i//batch_size + 1})"
                     create_draft(draft_subj, body_html, batch, invite_method, is_html=True)
 
-    # ==========================================
-    # 2. YESTERDAY'S LOGIC (GENTLE NOTICES)
+# ==========================================
+    # 2. YESTERDAY'S LOGIC (GENTLE NOTICES AS DRAFTS)
     # ==========================================
     yesterday_meeting = meetings_data[meetings_data['Meeting Day'] == yesterday_name]
     if not yesterday_meeting.empty:
@@ -250,13 +233,26 @@ def run_robot():
         except gspread.exceptions.WorksheetNotFound:
             yesterday_attendees = []
 
+        # 1. تجميع إيميلات المتغيبين في قائمة واحدة
+        absent_emails = []
         for index, row in reg_df.iterrows():
             email = str(row.iloc[1]).strip().lower()
             raw_abs = row.get('Absences', row.get('الغيابات', 0))
             absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
             
             if email not in yesterday_attendees and absences < max_abs:
-                send_gentle_notice(email, yesterday_name)
+                absent_emails.append(email)
 
-if __name__ == "__main__":
-    run_robot()
+        # 2. إنشاء المسودة للمتغيبين (BCC)
+        if absent_emails:
+            notice_subject = "نفتقدك في زمالة الخليج"
+            notice_body = f"مرحباً،\n\nلاحظنا عدم حضورك لاجتماع يوم {yesterday_name}، ونتمنى أن تكون بخير وبأفضل حال.\nنفتقد تواجدك معنا، ونتطلع لرؤيتك في الاجتماع القادم.\n\nنحن بالفعل نتعافى!"
+            
+            # تقسيم الإيميلات إلى دفعات (45 إيميل لكل مسودة) لتجنب حظر جوجل
+            batch_size = 45
+            for i in range(0, len(absent_emails), batch_size):
+                batch = absent_emails[i:i+batch_size]
+                draft_subj = notice_subject if len(absent_emails) <= batch_size else f"{notice_subject} (Part {i//batch_size + 1})"
+                
+                # نستخدم دالة create_draft الموجودة مسبقاً بدلاً من الإرسال المباشر
+                create_draft(draft_subj, notice_body, batch, "BCC", is_html=False)
