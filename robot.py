@@ -39,7 +39,7 @@ def create_draft(subject, body, emails, invite_method):
     msg['Subject'] = subject
     msg['From'] = SENDER_EMAIL
     
-    # تحديد طريقة الإرسال بناءً على ملف التحكم
+    # Set BCC or CC based on Master Sheet
     if invite_method.upper() == 'BCC':
         msg['Bcc'] = ", ".join(emails)
     else:
@@ -48,7 +48,7 @@ def create_draft(subject, body, emails, invite_method):
     try:
         imap = imaplib.IMAP4_SSL('imap.gmail.com')
         imap.login(SENDER_EMAIL, APP_PASSWORD)
-        # رفع الرسالة لمجلد المسودات (Drafts)
+        # Upload to Drafts folder
         imap.append('[Gmail]/Drafts', '', imaplib.Time2Internaldate(time.time()), msg.as_bytes())
         imap.logout()
         print(f"Draft created successfully for {len(emails)} people.")
@@ -56,7 +56,6 @@ def create_draft(subject, body, emails, invite_method):
         print(f"Failed to create draft: {e}")
 
 def send_gentle_notice(email_address, meeting_day):
-    # يمكنك تعديل هذا النص اللطيف كما تفضل
     subject = "نفتقدك في زمالة الخليج"
     body = f"مرحباً،\n\nلاحظنا عدم حضورك لاجتماع يوم {meeting_day}، ونتمنى أن تكون بخير وبأفضل حال.\nنفتقد تواجدك معنا، ونتطلع لرؤيتك في الاجتماع القادم.\n\nنحن بالفعل نتعافى!"
     
@@ -79,7 +78,7 @@ def run_robot():
     master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
     meetings_data = pd.DataFrame(master_sheet.get_all_records())
     
-    # 1. منطق اليوم: إنشاء مسودة الدعوة
+    # 1. Today's Logic: Create Invitation Draft
     today_meeting = meetings_data[meetings_data['Meeting Day'] == today_name]
     if not today_meeting.empty:
         meeting_info = today_meeting.iloc[0]
@@ -91,16 +90,11 @@ def run_robot():
         reg_tab = target_db.worksheet("Registration")
         reg_df = pd.DataFrame(reg_tab.get_all_records())
         
-        # استخراج الإيميلات الصالحة (الذين لم يتجاوزوا الغياب)
-        # يفترض الكود وجود عمود اسمه "Absences" أو "الغيابات" يحسب عدد الغيابات. إذا لم يوجد، سيعتبر الغياب 0
         valid_emails = []
         for index, row in reg_df.iterrows():
             raw_abs = row.get('Absences', row.get('الغيابات', 0))
             absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
-            if absences < max_abs:
-                valid_emails.append(str(row.iloc[1]).strip().lower())
-            raw_abs = row.get('Absences', row.get('الغيابات', 0))
-absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
+            
             if absences < max_abs:
                 valid_emails.append(str(row.iloc[1]).strip().lower())
         
@@ -109,7 +103,7 @@ absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
             body = f"مرحباً بكم،\n\nتجدون أدناه تفاصيل اجتماع اليوم.\n\nرابط زووم: {meeting_info['Zoom Link']}\n\nنحن بالفعل نتعافى!"
             create_draft(subject, body, valid_emails, invite_method)
 
-    # 2. منطق الأمس: إرسال رسائل الافتقاد اللطيفة
+    # 2. Yesterday's Logic: Send Gentle Notices
     yesterday_meeting = meetings_data[meetings_data['Meeting Day'] == yesterday_name]
     if not yesterday_meeting.empty:
         meeting_info = yesterday_meeting.iloc[0]
@@ -123,18 +117,16 @@ absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
         try:
             check_in_tab = target_db.worksheet("Check-In Log")
             check_in_df = pd.DataFrame(check_in_tab.get_all_records())
-            # جلب إيميلات الحضور ليوم أمس
             yesterday_attendees = check_in_df[check_in_df['Timestamp'].astype(str).str.contains(yesterday_date_str, na=False)]['Email'].str.lower().str.strip().tolist()
         except gspread.exceptions.WorksheetNotFound:
             yesterday_attendees = []
 
-# مقارنة المسجلين مع الحضور
+        # Compare registered users with attendees
         for index, row in reg_df.iterrows():
             email = str(row.iloc[1]).strip().lower()
             raw_abs = row.get('Absences', row.get('الغيابات', 0))
             absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
             
-            # إذا لم يحضر أمس، ولم يتجاوز الحد الأقصى للغيابات
             if email not in yesterday_attendees and absences < max_abs:
                 send_gentle_notice(email, yesterday_name)
 
