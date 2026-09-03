@@ -72,10 +72,10 @@ def send_gentle_notice(email_address, meeting_day):
     msg['To'] = email_address
 
     try:
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login(SENDER_EMAIL, APP_PASSWORD)
-        server.send_message(msg)
-        server.quit()
+        #server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        #server.login(SENDER_EMAIL, APP_PASSWORD)
+        #server.send_message(msg)
+        #server.quit()
         print(f"Gentle notice sent to {email_address}")
     except Exception as e:
         print(f"Failed to send notice to {email_address}: {e}")
