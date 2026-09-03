@@ -49,7 +49,7 @@ try:
     meetings_data = pd.DataFrame(master_sheet.get_all_records())
     available_meetings = meetings_data['Meeting Day'].tolist()
 except Exception as e:
-    st.error("جاري تحديث النظام، يرجى المحاولة لاحقاً.")
+    st.error(f"System Error: {e}")
     st.stop()
 
 # Build the Input Form
@@ -89,4 +89,4 @@ if st.button("تسجيل الحضور وعرض الرابط (Check-In)"):
                 else:
                     st.error("❌ عذراً، هذا البريد غير مسجل في قائمة هذا الاجتماع. يرجى التأكد من البريد أو تقديم طلب انضمام.")
             except Exception as e:
-                st.error("حدث خطأ أثناء جلب البيانات. تأكد من إعدادات ملف Google Sheet.")
+                st.error(f"حدث خطأ أثناء جلب البيانات: {e}")
