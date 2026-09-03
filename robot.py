@@ -109,8 +109,11 @@ def run_robot():
                 valid_emails.append(str(row.iloc[1]).strip().lower())
                 
         if valid_emails:
-            if today_name == "الأحد":
-                # --- SUNDAY SPECIFIC LOGIC ---
+            # 💡 التعديل الجديد: الروبوت يحدد نوع القالب بناءً على محتوى الملف وليس اسم اليوم
+            worksheet_names = [ws.title for ws in target_db.worksheets()]
+            
+            if "اجتماع اليوم" in worksheet_names:
+                # --- TEXT TEMPLATE LOGIC (القالب الأول) ---
                 try:
                     sun_tab = target_db.worksheet("اجتماع اليوم")
                     meeting_topic = sun_tab.acell('F9').value or "موضوع غير محدد"
@@ -124,7 +127,6 @@ def run_robot():
                     meeting_topic = "موضوع غير محدد"
                     display_date = today_str
                     
-                # Timezones Calculation (21:00 Baghdad Time)
                 meet_dt = baghdad_tz.localize(datetime.strptime(today_str + " 21:00:00", "%Y-%m-%d %H:%M:%S"))
                 tzs = [
                     ("Asia/Dubai", "Dubai", "دبي"), ("Asia/Muscat", "Muscat", "مسقط"),
@@ -142,13 +144,13 @@ def run_robot():
                     if loc_time.startswith('0'): loc_time = loc_time[1:]
                     dyn_time += f"{loc_time} -- {en_name}/{ar_name}\n"
                     
-                body = f"👨🏻‍💻👩🏻‍💻 يـرجـى قـــراءة ا لاعـــلان جــيــدا\n\n                   تـــدعـــوكــــم  \n      ༺☆» زمـــالــة الـــخــلـــيـــج »☆༻ \n\n    «☆«☆«☆«☆📖📚📖☆ »☆»☆»☆»\n\n🌅 الـيـوم :- الا حـــــــــد\n🗓 الـتـاريـخ :- {display_date}\n\n✍🏼نـوع الاجـتمـاع:- قـــراءه مـــن\n\n  \n🔵🔷🔹📖 {meeting_topic} 🔹🔷🔵\n\n\n🙋🏻‍♀️🙋🏻 تــنــبــيــه هــام :-\nالـحـضـوره فـقـط وحـصـرا لاعـضـاء مـجـمـوعـة زمـالـة الـخـلـيـج الام\n\n༺»مدة الأجـتـمـاع:- 70 دقيقة«༻\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n📟 بداية وقت الاجتماع \n📟 Meeting Start Time\n\nالوقت/Time\n{dyn_time.strip()}\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n1- سيتم نشر رابط الاجتماع على مجموعات زمالة الخليج حصرا قبل «15 دقيقه» من بداية الاجتماع\n2- سـيــتـم غــلــق الـغـرفــة بـعـد «20 دقيقة» من بدء الاجتماع\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n🔗 رابط تسجيل الدخول للاجتماع (البوابة):\n{PORTAL_LINK}\n\n🔗 رابط استبيان اليوم:\n{form_link}\n\nبـأنـتـظـار حضوركم  !\nنـحــن بـالـفــعـل نـتـعـافـى 🙏🏼"
+                body = f"👨🏻‍💻👩🏻‍💻 يـرجـى قـــراءة ا لاعـــلان جــيــدا\n\n                   تـــدعـــوكــــم  \n      ༺☆» زمـــالــة الـــخــلـــيـــج »☆༻ \n\n    «☆«☆«☆«☆📖📚📖☆ »☆»☆»☆»\n\n🌅 الـيـوم :- {today_name}\n🗓 الـتـاريـخ :- {display_date}\n\n✍🏼نـوع الاجـتمـاع:- قـــراءه مـــن\n\n  \n🔵🔷🔹📖 {meeting_topic} 🔹🔷🔵\n\n\n🙋🏻‍♀️🙋🏻 تــنــبــيــه هــام :-\nالـحـضـوره فـقـط وحـصـرا لاعـضـاء مـجـمـوعـة زمـالـة الـخـلـيـج الام\n\n༺»مدة الأجـتـمـاع:- 70 دقيقة«༻\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n📟 بداية وقت الاجتماع \n📟 Meeting Start Time\n\nالوقت/Time\n{dyn_time.strip()}\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n1- سيتم نشر رابط الاجتماع على مجموعات زمالة الخليج حصرا قبل «15 دقيقه» من بداية الاجتماع\n2- سـيــتـم غــلــق الـغـرفــة بـعـد «20 دقيقة» من بدء الاجتماع\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n🔗 رابط تسجيل الدخول للاجتماع (البوابة):\n{PORTAL_LINK}\n\n🔗 رابط استبيان اليوم:\n{form_link}\n\nبـأنـتـظـار حضوركم  !\nنـحــن بـالـفــعـل نـتـعـافـى 🙏🏼"
                 
                 subject = "اعلان اجتماع الخليج"
                 create_draft(subject, body, valid_emails, invite_method, is_html=False)
 
-            elif today_name == "الأربعاء":
-                # --- WEDNESDAY SPECIFIC LOGIC ---
+            elif "Meetings" in worksheet_names:
+                # --- HTML TEMPLATE LOGIC (القالب الثاني) ---
                 meeting_topic = "موضوع غير محدد"
                 try:
                     meet_tab = target_db.worksheet("Meetings")
@@ -156,6 +158,7 @@ def run_robot():
                     for row in m_data[1:]:
                         if not row: continue
                         try:
+                            # يحاول الروبوت العثور على تاريخ اليوم في الجدول
                             row_date = pd.to_datetime(row[0]).strftime("%Y-%m-%d")
                             if row_date == today_str:
                                 meeting_topic = str(row[1])
@@ -165,7 +168,6 @@ def run_robot():
                 except:
                     pass
 
-                # Timezones Calculation (17:30 UTC)
                 meet_utc = pytz.utc.localize(datetime.strptime(today_str + " 17:30:00", "%Y-%m-%d %H:%M:%S"))
                 cities = [
                     ("Asia/Dubai", "دبي / مسقط"), ("Asia/Riyadh", "الرياض"),
@@ -191,7 +193,7 @@ def run_robot():
                   تدعوكم ༺ زمالة الخليج ༻ إلى اجتماع القادم الجديد، وموضوع اجتماع اليوم هو:<br><br>
                   
                   {meeting_topic}<br>
-                  الأربعاء الموافق {today_str.replace('-', '/')}<br><br>
+                  {today_name} الموافق {today_str.replace('-', '/')}<br><br>
                   
                   📌 <b>ملاحظة هامة:</b><br>
                   تُغلق الغرفة بعد 20 دقيقة من بدء الاجتماع.<br>
@@ -218,7 +220,6 @@ def run_robot():
                 
                 subject = f"دعوة لاجتماع زمالة الخليج - {today_str.replace('-', '/')}"
                 
-                # Batch Processing (45 emails per draft)
                 batch_size = 45
                 for i in range(0, len(valid_emails), batch_size):
                     batch = valid_emails[i:i+batch_size]
