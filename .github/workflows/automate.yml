@@ -1,22 +1,13 @@
-name: Fellowship Weekly Automation
+name: Fellowship Daily Global Engine
 
 on:
   schedule:
-    - cron: '0 6 * * 0'
-    - cron: '0 6 * * 1'
-  workflow_dispatch:
-    inputs:
-      day_to_test:
-        description: 'Which script do you want to manually test?'
-        required: true
-        default: 'Sunday'
-        type: choice
-        options:
-          - Sunday
-          - Monday
+    # Runs EVERY DAY at 6:00 AM UTC (9:00 AM Baghdad time)
+    - cron: '0 6 * * *'
+  workflow_dispatch: 
 
 jobs:
-  run-scripts:
+  run-daily-robot:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -31,18 +22,9 @@ jobs:
         run: |
           pip install pandas gspread oauth2client pytz
 
-      - name: Run Sunday Script
-        if: github.event.schedule == '0 6 * * 0' || github.event.inputs.day_to_test == 'Sunday'
+      - name: Run Daily Robot
         env:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-        run: python sunday.py
-
-      - name: Run Monday Script
-        if: github.event.schedule == '0 6 * * 1' || github.event.inputs.day_to_test == 'Monday'
-        env:
-          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-        run: python monday.py
+        run: python daily_robot.py
