@@ -233,13 +233,20 @@ def run_robot():
         except gspread.exceptions.WorksheetNotFound:
             yesterday_attendees = []
 
-        # 1. تجميع إيميلات المتغيبين في قائمة واحدة
+# 1. تجميع إيميلات المتغيبين في قائمة واحدة
         absent_emails = []
         for index, row in reg_df.iterrows():
             email = str(row.iloc[1]).strip().lower()
             raw_abs = row.get('Absences', row.get('الغيابات', 0))
-            absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
             
+            # --- المعالجة الذكية للخلايا الفارغة (NaN) ---
+            try:
+                absences = int(float(raw_abs))
+            except (ValueError, TypeError):
+                absences = 0
+            # ---------------------------------------
+            
+            # إذا لم يحضر أمس (غير موجود في سجل الحضور)، ولم يُطرد بعد
             if email not in yesterday_attendees and absences < max_abs:
                 absent_emails.append(email)
 
