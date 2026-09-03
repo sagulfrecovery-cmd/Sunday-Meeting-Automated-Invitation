@@ -96,6 +96,10 @@ def run_robot():
         valid_emails = []
         for index, row in reg_df.iterrows():
             raw_abs = row.get('Absences', row.get('الغيابات', 0))
+            absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
+            if absences < max_abs:
+                valid_emails.append(str(row.iloc[1]).strip().lower())
+            raw_abs = row.get('Absences', row.get('الغيابات', 0))
 absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
             if absences < max_abs:
                 valid_emails.append(str(row.iloc[1]).strip().lower())
@@ -124,10 +128,11 @@ absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
         except gspread.exceptions.WorksheetNotFound:
             yesterday_attendees = []
 
-        # مقارنة المسجلين مع الحضور
+# مقارنة المسجلين مع الحضور
         for index, row in reg_df.iterrows():
             email = str(row.iloc[1]).strip().lower()
-            absences = int(row.get('Absences', row.get('الغيابات', 0)))
+            raw_abs = row.get('Absences', row.get('الغيابات', 0))
+            absences = int(raw_abs) if str(raw_abs).strip() != '' else 0
             
             # إذا لم يحضر أمس، ولم يتجاوز الحد الأقصى للغيابات
             if email not in yesterday_attendees and absences < max_abs:
