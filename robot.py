@@ -118,7 +118,9 @@ def run_maintenance(meetings_data):
         print(f"❌ خطأ في فحص الإيميلات المرتدة: {e}")
 
     unique_targets = meetings_data['Target Sheet ID'].dropna().unique()
-    ninety_days_ago = datetime.now() - timedelta(days=90)
+    
+    # مهلة الـ 90 يوماً
+    cutoff_date = datetime.now() - timedelta(days=90) 
     
     for target_id in unique_targets:
         try:
@@ -153,24 +155,24 @@ def run_maintenance(meetings_data):
                 if not em: continue
                 absences = get_safe_absences(row)
                 
-                # 1. حذف الإيميلات المرتدة (Bounces)
+                # 1. حذف الإيميلات المرتدة (Bounces) فوراً
                 if em in bounced_emails:
                     rows_to_delete.append(i + 2)
                     continue
                     
-                # 2. حذف الحسابات الميتة (أكثر من 90 يوم مع وصول الحد الأقصى)
+                # 2. حذف الحسابات المتوقفة التي تجاوزت الحد الأقصى ومضى على آخر نشاط لها أكثر من 90 يوماً
                 if absences >= max_abs:
                     last_active = last_seen.get(em)
-                    if not last_active or last_active < ninety_days_ago:
+                    if not last_active or last_active < cutoff_date:
                         rows_to_delete.append(i + 2)
                         
-            # تنفيذ الحذف من الأسفل للأعلى
+            # تنفيذ الحذف من الأسفل للأعلى لضمان ثبات الترتيب
             for row_num in sorted(list(set(rows_to_delete)), reverse=True):
                 reg_tab.delete_rows(row_num)
-                time.sleep(1.5) # لتجنب حظر جوجل API
+                time.sleep(1.5) # لتجنب حظر قيود Google Sheets API
                 
             if rows_to_delete:
-                print(f"🧹 تم تنظيف {len(rows_to_delete)} سجل في الملف (مرتدة أو قديمة).")
+                print(f"🧹 تم تنظيف {len(rows_to_delete)} سجل في الملف (مرتدة أو غير نشطة لأكثر من 90 يوماً).")
                 
         except Exception as e:
             pass
