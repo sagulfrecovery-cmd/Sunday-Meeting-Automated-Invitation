@@ -5,6 +5,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 import smtplib
 import imaplib
+import email
+import re
 import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -85,14 +87,102 @@ def send_admin_report(subject, html_body, to_emails):
         server.login(SENDER_EMAIL, APP_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print(f"📧 تم إرسال تقرير الإدارة بنجاح إلى: {to_emails}")
+        print(f"📧 تم إرسال تقرير الإدارة بنجاح.")
     except Exception as e:
         print(f"❌ فشل في إرسال تقرير الإدارة: {e}")
+
+# --- MAINTENANCE LOGIC (BOUNCES & 90-DAY RETENTION) ---
+def run_maintenance(meetings_data):
+    print("🛠️ بدء عملية الصيانة الدورية (فحص المرتجعات والاحتفاظ بالبيانات)...")
+    bounced_emails = set()
+    try:
+        imap = imaplib.IMAP4_SSL('imap.gmail.com')
+        imap.login(SENDER_EMAIL, APP_PASSWORD)
+        imap.select('INBOX')
+        typ, data = imap.search(None, '(SUBJECT "Undelivered Mail Returned to Sender")')
+        for num in data[0].split():
+            typ, msg_data = imap.fetch(num, '(RFC822)')
+            for response_part in msg_data:
+                if isinstance(response_part, tuple):
+                    msg = email.message_from_bytes(response_part[1])
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            if part.get_content_type() == "text/plain":
+                                body = part.get_payload(decode=True).decode(errors='ignore')
+                                match = re.search(r'<([^>]+)>', body)
+                                if match:
+                                    bounced_emails.add(match.group(1).lower())
+        imap.logout()
+        if bounced_emails: print(f"⚠️ تم رصد {len(bounced_emails)} إيميل مرتد (وهمي). سيتم حذفها.")
+    except Exception as e:
+        print(f"❌ خطأ في فحص الإيميلات المرتدة: {e}")
+
+    unique_targets = meetings_data['Target Sheet ID'].dropna().unique()
+    ninety_days_ago = datetime.now() - timedelta(days=90)
+    
+    for target_id in unique_targets:
+        try:
+            target_db = client.open_by_key(str(target_id).strip())
+            reg_tab = target_db.worksheet("Registration")
+            reg_records = reg_tab.get_all_records()
+            
+            try:
+                check_in_tab = target_db.worksheet("Check-In Log")
+                check_in_records = check_in_tab.get_all_records()
+            except:
+                check_in_records = []
+                
+            last_seen = {}
+            for row in check_in_records:
+                em = str(row.get('Email', '')).strip().lower()
+                ts = str(row.get('Timestamp', ''))
+                if em and ts:
+                    try:
+                        date_obj = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+                        if em not in last_seen or date_obj > last_seen[em]:
+                            last_seen[em] = date_obj
+                    except:
+                        pass
+            
+            target_info = meetings_data[meetings_data['Target Sheet ID'] == target_id].iloc[0]
+            max_abs = int(target_info.get('Max Absences', 4))
+            
+            rows_to_delete = []
+            for i, row in enumerate(reg_records):
+                em = str(row.get('Email', '')).strip().lower()
+                if not em: continue
+                absences = get_safe_absences(row)
+                
+                # 1. حذف الإيميلات المرتدة (Bounces)
+                if em in bounced_emails:
+                    rows_to_delete.append(i + 2)
+                    continue
+                    
+                # 2. حذف الحسابات الميتة (أكثر من 90 يوم مع وصول الحد الأقصى)
+                if absences >= max_abs:
+                    last_active = last_seen.get(em)
+                    if not last_active or last_active < ninety_days_ago:
+                        rows_to_delete.append(i + 2)
+                        
+            # تنفيذ الحذف من الأسفل للأعلى
+            for row_num in sorted(list(set(rows_to_delete)), reverse=True):
+                reg_tab.delete_rows(row_num)
+                time.sleep(1.5) # لتجنب حظر جوجل API
+                
+            if rows_to_delete:
+                print(f"🧹 تم تنظيف {len(rows_to_delete)} سجل في الملف (مرتدة أو قديمة).")
+                
+        except Exception as e:
+            pass
+    print("✨ تمت عملية الصيانة بنجاح.")
 
 # --- MAIN LOGIC ---
 def run_robot():
     master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
     meetings_data = pd.DataFrame(master_sheet.get_all_records())
+    
+    # تنفيذ الصيانة والتنظيف قبل قراءة البيانات للإرسال
+    run_maintenance(meetings_data)
     
     # ==========================================
     # 1. TODAY'S MEETING LOGIC (CREATE DRAFTS)
@@ -131,6 +221,7 @@ def run_robot():
             worksheet_names = [ws.title for ws in target_db.worksheets()]
             
             if "اجتماع اليوم" in worksheet_names:
+                print("📝 استخدام القالب الجديد HTML (اجتماع الأحد)...")
                 try:
                     sun_tab = target_db.worksheet("اجتماع اليوم")
                     meeting_topic = sun_tab.acell('F9').value or "موضوع غير محدد"
@@ -143,15 +234,47 @@ def run_robot():
                     
                 meet_dt = baghdad_tz.localize(datetime.strptime(today_str + " 21:00:00", "%Y-%m-%d %H:%M:%S"))
                 tzs = [("Asia/Dubai", "Dubai", "دبي"), ("Asia/Baghdad", "Baghdad", "بغداد"), ("Africa/Cairo", "Cairo", "القاهرة"), ("Europe/London", "London", "لندن"), ("America/New_York", "New_York", "نيويورك")]
-                dyn_time = ""
+                dyn_time_html = ""
                 for tz_name, en_name, ar_name in tzs:
-                    loc_time = meet_dt.astimezone(pytz.timezone(tz_name)).strftime("%I:%M%p").upper().lstrip('0')
-                    dyn_time += f"{loc_time} -- {en_name}/{ar_name}\n"
+                    loc_time = meet_dt.astimezone(pytz.timezone(tz_name)).strftime("%I:%M %p").upper().lstrip('0')
+                    dyn_time_html += f"{loc_time} -- {en_name}/{ar_name}<br>"
                     
-                body = f"👨🏻‍💻👩🏻‍💻 يـرجـى قـــراءة ا لاعـــلان جــيــدا\n\n                   تـــدعـــوكــــم  \n      ༺☆» زمـــالــة الـــخــلـــيـــج »☆༻ \n\n    «☆«☆«☆«☆📖📚📖☆ »☆»☆»☆»\n\n🌅 الـيـوم :- {today_name}\n🗓 الـتـاريـخ :- {display_date}\n\n✍🏼نـوع الاجـتمـاع:- قـــراءه مـــن\n\n  \n🔵🔷🔹📖 {meeting_topic} 🔹🔷🔵\n\n\n🙋🏻‍♀️🙋🏻 تــنــبــيــه هــام :-\nالـحـضـوره فـقـط وحـصـرا لاعـضـاء مـجـمـوعـة زمـالـة الـخـلـيـج الام\n\n༺»مدة الأجـتـمـاع:- 70 دقيقة«༻\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n📟 بداية وقت الاجتماع \n📟 Meeting Start Time\n\nالوقت/Time\n{dyn_time.strip()}\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n1- سيتم نشر رابط الاجتماع على مجموعات زمالة الخليج حصرا قبل «15 دقيقه» من بداية الاجتماع\n2- سـيــتـم غــلــق الـغـرفــة بـعـد «20 دقيقة» من بدء الاجتماع\n\n-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-\n\n🔗 رابط تسجيل الدخول للاجتماع (البوابة):\n{PORTAL_LINK}\n\nبـأنـتـظـار حضوركم  !\nنـحــن بـالـفــعـل نـتـعـافـى 🙏🏼"
-                create_draft("اعلان اجتماع الخليج", body, valid_emails, invite_method, is_html=False)
+                # القالب الجديد لاجتماع الأحد بصيغة HTML الأنيقة
+                body_html_sun = f"""
+                <div dir="rtl" style="text-align: right; font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6;">
+                    👨🏻‍💻👩🏻‍💻 <b>يـرجـى قـــراءة ا لاعـــلان جــيــدا</b><br><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;تـــدعـــوكــــم<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;༺☆» <b>زمـــالــة الـــخــلـــيـــج</b> »☆༻<br><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;«☆«☆«☆«☆📖📚📖☆ »☆»☆»☆»<br><br>
+                    🌅 <b>الـيـوم:</b> {today_name}<br>
+                    🗓 <b>الـتـاريـخ:</b> {display_date}<br><br>
+                    ✍🏼 <b>نـوع الاجـتمـاع:</b> قـــراءه مـــن<br><br>
+                    🔵🔷🔹📖 <b>{meeting_topic}</b> 🔹🔷🔵<br><br><br>
+                    🙋🏻‍♀️🙋🏻 <b>تــنــبــيــه هــام:</b><br>
+                    الـحـضـوره فـقـط وحـصـرا لاعـضـاء مـجـمـوعـة زمـالـة الـخـلـيـج الام<br><br>
+                    ༺» مدة الأجـتـمـاع: 70 دقيقة «༻<br><br>
+                    <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
+                    📟 <b>بداية وقت الاجتماع</b><br>
+                    📟 <b>Meeting Start Time</b><br><br>
+                    الوقت/Time<br>
+                    <div style="direction: ltr; text-align: right;">
+                    {dyn_time_html}
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
+                    1- سيتم نشر رابط الاجتماع على مجموعات زمالة الخليج حصرا قبل «15 دقيقه» من بداية الاجتماع<br>
+                    2- سـيــتـم غــلــق الـغـرفــة بـعـد «20 دقيقة» من بدء الاجتماع<br>
+                    <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
+                    🔗 <b>رابط تسجيل الدخول للاجتماع (البوابة):</b><br>
+                    <a href="{PORTAL_LINK}" style="color: #15c; text-decoration: underline;">بوابة تسجيل الحضور</a><br><br>
+                    بـأنـتـظـار حضوركم !<br>
+                    نـحــن بـالـفــعـل نـتـعـافـى 🙏🏼
+                </div>
+                """
+                # استخدمنا is_html=True 
+                create_draft("اعلان اجتماع الخليج", body_html_sun, valid_emails, invite_method, is_html=True)
 
             elif "Meetings" in worksheet_names:
+                print("🎨 استخدام قالب HTML (Meetings)...")
                 meeting_topic = "موضوع غير محدد"
                 try:
                     meet_tab = target_db.worksheet("Meetings")
@@ -241,7 +364,7 @@ def run_robot():
                     absent_emails.append(email)
 
         if absent_emails:
-            print(f"⚠️ تم رصد {len(absent_emails)} غياب. جاري إنشاء مسودة التنبيه...")
+            print(f"⚠️ تم رصد {len(absent_emails)} غياب. جاري إنشاء مسودة التنبيه (BCC)...")
             notice_subject = "نفتقدك في زمالة الخليج"
             notice_body = f"مرحباً،\n\nلاحظنا عدم حضورك لاجتماع يوم {yesterday_name}، ونتمنى أن تكون بخير.\nنفتقد تواجدك معنا، ونتطلع لرؤيتك قريباً.\n\nنحن بالفعل نتعافى!"
             
