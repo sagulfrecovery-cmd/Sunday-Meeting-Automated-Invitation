@@ -261,8 +261,7 @@ def run_robot():
                     {dyn_time_html}
                     </div>
                     <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
-                    1- سيتم نشر رابط الاجتماع على مجموعات زمالة الخليج حصرا قبل «15 دقيقه» من بداية الاجتماع<br>
-                    2- سـيــتـم غــلــق الـغـرفــة بـعـد «20 دقيقة» من بدء الاجتماع<br>
+                    سـيــتـم غــلــق الـغـرفــة بـعـد «20 دقيقة» من بدء الاجتماع<br>
                     <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
                     🔗 <b>رابط تسجيل الدخول للاجتماع (البوابة):</b><br>
                     <a href="{PORTAL_LINK}" style="color: #15c; text-decoration: underline;">بوابة تسجيل الحضور</a><br><br>
