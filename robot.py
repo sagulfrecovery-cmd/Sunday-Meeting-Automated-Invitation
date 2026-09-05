@@ -180,7 +180,7 @@ def run_maintenance(meetings_data):
 
 # --- MAIN LOGIC ---
 def run_robot():
-   master_sheet = None
+    master_sheet = None
     for attempt in range(5):
         try:
             master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
@@ -193,6 +193,7 @@ def run_robot():
             else:
                 print("❌ فشل الاتصال بجوجل تماماً بعد 5 محاولات.")
                 raise e
+                
     meetings_data = pd.DataFrame(master_sheet.get_all_records())
     
     # تنفيذ الصيانة والتنظيف قبل قراءة البيانات للإرسال
