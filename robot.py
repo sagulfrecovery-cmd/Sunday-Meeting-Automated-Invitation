@@ -341,18 +341,21 @@ def run_robot():
             """
             send_admin_report(admin_subject_1, admin_body_1, admin_emails_1)
 
-    # ==========================================
-    # 2. YESTERDAY'S LOGIC (GENTLE NOTICES AS DRAFTS)
+# ==========================================
+    # 2. YESTERDAY'S LOGIC (GENTLE NOTICES AS DRAFTS + UPDATE EXCEL)
     # ==========================================
     yesterday_meeting = meetings_data[meetings_data['Meeting Day'] == yesterday_name]
     if not yesterday_meeting.empty:
-        print(f"📅 تم العثور على اجتماع يوم الأمس ({yesterday_name}). جاري فحص الغيابات...")
+        print(f"📅 تم العثور على اجتماع يوم الأمس ({yesterday_name}). جاري فحص وتسجيل الغيابات...")
         meeting_info = yesterday_meeting.iloc[0]
         target_id = str(meeting_info['Target Sheet ID']).strip()
         max_abs = int(meeting_info['Max Absences'])
         
         target_db = client.open_by_key(target_id)
-        reg_df = pd.DataFrame(target_db.worksheet("Registration").get_all_records())
+        
+        # 🟢 تعديل 1: تعريف reg_tab لكي نتمكن من الكتابة والتعديل عليها
+        reg_tab = target_db.worksheet("Registration")
+        reg_df = pd.DataFrame(reg_tab.get_all_records())
         
         try:
             check_in_df = pd.DataFrame(target_db.worksheet("Check-In Log").get_all_records())
@@ -364,6 +367,10 @@ def run_robot():
         removed_emails_yest = []
         warned_emails_yest = []
         
+        # 🟢 تعديل 2: تحديد رقم عمود الغيابات ديناميكياً لتجنب الأخطاء
+        abs_col_name = 'Absences' if 'Absences' in reg_df.columns else 'الغيابات'
+        abs_col_idx = reg_df.columns.get_loc(abs_col_name) + 1
+        
         for index, row in reg_df.iterrows():
             email = str(row.iloc[1]).strip().lower()
             if not email: continue
@@ -372,13 +379,24 @@ def run_robot():
             if absences >= max_abs:
                 removed_emails_yest.append(email)
             else:
-                if absences > 0:
-                    warned_emails_yest.append(email)
                 if email not in yesterday_attendees:
                     absent_emails.append(email)
+                    
+                    # 🟢 تعديل 3 (الحل الجذري): تسجيل الغياب (+1) في شيت جوجل
+                    new_abs = absences + 1
+                    reg_tab.update_cell(index + 2, abs_col_idx, new_abs)
+                    time.sleep(1) # استراحة ثانية لتجنب حظر جوجل (503)
+                    
+                    if new_abs < max_abs:
+                        warned_emails_yest.append(email)
+                else:
+                    # 🟢 ميزة إضافية: إذا حضر الشخص، صفر غياباته السابقة
+                    if absences > 0:
+                        reg_tab.update_cell(index + 2, abs_col_idx, 0)
+                        time.sleep(1)
 
         if absent_emails:
-            print(f"⚠️ تم رصد {len(absent_emails)} غياب. جاري إنشاء مسودة التنبيه (BCC)...")
+            print(f"⚠️ تم رصد وتسجيل {len(absent_emails)} غياب. جاري إنشاء مسودة التنبيه (BCC)...")
             notice_subject = "نفتقدك في زمالة الخليج"
             notice_body = f"مرحباً،\n\nلاحظنا عدم حضورك لاجتماع يوم {yesterday_name}، ونتمنى أن تكون بخير.\nنفتقد تواجدك معنا، ونتطلع لرؤيتك قريباً.\n\nنحن بالفعل نتعافى!"
             
