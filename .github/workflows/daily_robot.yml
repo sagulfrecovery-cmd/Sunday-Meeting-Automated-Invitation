@@ -2,7 +2,7 @@ name: Daily Fellowship Robot
 
 on:
   schedule:
-    # يعمل الساعة 06:00 صباحاً بتوقيت UTC كل يوم
+    # يعمل الساعة 06:07 صباحاً بتوقيت UTC كل يوم
     - cron: '7 6 * * *'
   workflow_dispatch: # يسمح لك بتشغيله يدوياً للاختبار
 
