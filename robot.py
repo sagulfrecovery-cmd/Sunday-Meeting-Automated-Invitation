@@ -207,15 +207,22 @@ def run_robot():
     if not today_meeting.empty:
         print(f"📅 تم العثور على اجتماع اليوم ({today_name}). جاري التحضير...")
         
-        # --- إضافة إيقاظ البوابة لاجتماع اليوم (مع نظام المحاولات وإنذار الطوارئ) ---
+      # --- إضافة إيقاظ البوابة لاجتماع اليوم (مع نظام المحاولات وإنذار الطوارئ) ---
         print("🌐 جاري إرسال نبضة لإيقاظ البوابة استعداداً لاجتماع اليوم...")
         for attempt in range(3):
             try:
                 req = urllib.request.Request(PORTAL_LINK, headers={'User-Agent': 'Mozilla/5.0'})
                 urllib.request.urlopen(req, timeout=10)
-                print("✅ تم إيقاظ البوابة بنجاح!")
+                print("✅ تم إيقاظ البوابة بنجاح (استجابة عادية)!")
                 break # إذا نجحت النبضة، اخرج من الحلقة
+                
+            except urllib.error.HTTPError as e:
+                # إذا رد السيرفر بـ 303 أو أي خطأ HTTP، فهذا يعني أنه حي ومستيقظ!
+                print(f"✅ البوابة مستيقظة وتتجاوب (رمز الاستجابة: {e.code})!")
+                break # نعتبرها نجاحاً ونخرج من الحلقة
+                
             except Exception as e:
+                # الأخطاء الحقيقية فقط (مثل انقطاع الاتصال تماماً Timeout)
                 if attempt < 2:
                     print(f"⚠️ فشلت المحاولة {attempt + 1}. إعادة المحاولة بعد 5 ثوانٍ...")
                     time.sleep(5)
@@ -236,7 +243,6 @@ def run_robot():
                         🔗 <a href="{PORTAL_LINK}" style="color: #15c; text-decoration: underline;">زيارة البوابة يدوياً</a>
                     </div>
                     """
-                    # استخدام دالة إرسال تقارير الإدارة الموجودة مسبقاً في الكود
                     send_admin_report(alert_subject, alert_body, alert_emails)
         # ----------------------------------------
         
