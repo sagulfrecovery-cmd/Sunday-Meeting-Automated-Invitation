@@ -1,3 +1,10 @@
+تم دمج "عهد التعافي" بنجاح وبشكل أنيق مع الكود الخاص بك!
+
+لقد أضفت فاصلًا بصريًا، ووضعت التعهد مباشرة تحت خانة إدخال الإيميل. الآن، لن يتمكن أي شخص من رؤية زر "تسجيل الحضور" أو الضغط عليه إلا بعد أن يتوقف للحظة، يقرأ العهد، ويضع علامة (✓). كما أضفت رسالة شكر صغيرة في إشعار النجاح لتعزيز هذا السلوك الإيجابي.
+
+إليك الكود المحدث بالكامل، يمكنك نسخه ولصقه مباشرة في ملف `portal.py`:
+
+```python
 import streamlit as st
 import pandas as pd
 import gspread
@@ -58,37 +65,50 @@ except Exception as e:
 selected_meeting = st.selectbox("اختر يوم الاجتماع (Select Meeting Day):", available_meetings)
 user_email = st.text_input("البريد الإلكتروني المسجل (Registered Email):").strip().lower()
 
-if st.button("تسجيل الحضور وعرض الرابط (Check-In)"):
-    if not user_email:
-        st.warning("يرجى إدخال البريد الإلكتروني.")
-    else:
-        with st.spinner("جاري التحقق من السجلات..."):
-            try:
-                meeting_info = meetings_data[meetings_data['Meeting Day'] == selected_meeting].iloc[0]
-                target_id = str(meeting_info['Target Sheet ID']).strip()
-                zoom_link = str(meeting_info['Zoom Link']).strip()
-                
-                target_db = client.open_by_key(target_id)
-                reg_tab = target_db.worksheet("Registration")
-                reg_df = pd.DataFrame(reg_tab.get_all_records())
-                
-                registered_emails = reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
+# --- عهد التعافي (Recovery Pledge) ---
+st.markdown("---")
+st.markdown("### 🤝 عهد التعافي")
+pledge = st.checkbox("أتعهد بصدق وأمانة أمام نفسي وتجاه زمالتي، أنني أسجل الآن بنية الحضور الفعلي للاجتماع في وقته المحدد.")
 
-                if user_email in registered_emails:
-                    try:
-                        check_in_tab = target_db.worksheet("Check-In Log")
-                    except gspread.exceptions.WorksheetNotFound:
-                        check_in_tab = target_db.add_worksheet(title="Check-In Log", rows="1000", cols="2")
-                        check_in_tab.append_row(["Timestamp", "Email"])
+# لن يتم تفعيل الزر إلا إذا قام العضو بتأكيد التعهد
+if pledge:
+    if st.button("تسجيل الحضور وعرض الرابط (Check-In)", use_container_width=True):
+        if not user_email:
+            st.warning("يرجى إدخال البريد الإلكتروني.")
+        else:
+            with st.spinner("جاري التحقق من السجلات..."):
+                try:
+                    meeting_info = meetings_data[meetings_data['Meeting Day'] == selected_meeting].iloc[0]
+                    target_id = str(meeting_info['Target Sheet ID']).strip()
+                    zoom_link = str(meeting_info['Zoom Link']).strip()
                     
-                    baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
-                    check_in_tab.append_row([baghdad_time, user_email])
+                    target_db = client.open_by_key(target_id)
+                    reg_tab = target_db.worksheet("Registration")
+                    reg_df = pd.DataFrame(reg_tab.get_all_records())
                     
-                    send_zoom_email(user_email, selected_meeting, zoom_link)
-                    
-                    st.success("✅ تم تسجيل الحضور بنجاح! تم إرسال الرابط إلى بريدك الإلكتروني.")
-                    st.info(f"🔗 **رابط زووم المباشر:**\n\n{zoom_link}")
-                else:
-                    st.error("❌ عذراً، هذا البريد غير مسجل في قائمة هذا الاجتماع. يرجى التأكد من البريد أو تقديم طلب انضمام.")
-            except Exception as e:
-                st.error(f"حدث خطأ أثناء جلب البيانات: {e}")
+                    registered_emails = reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
+
+                    if user_email in registered_emails:
+                        try:
+                            check_in_tab = target_db.worksheet("Check-In Log")
+                        except gspread.exceptions.WorksheetNotFound:
+                            check_in_tab = target_db.add_worksheet(title="Check-In Log", rows="1000", cols="2")
+                            check_in_tab.append_row(["Timestamp", "Email"])
+                        
+                        baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
+                        check_in_tab.append_row([baghdad_time, user_email])
+                        
+                        send_zoom_email(user_email, selected_meeting, zoom_link)
+                        
+                        st.success("✅ تم تسجيل حضورك بنجاح! شكراً لأمانتك، تم إرسال الرابط إلى بريدك الإلكتروني.")
+                        st.info(f"🔗 **رابط زووم المباشر:**\n\n{zoom_link}")
+                    else:
+                        st.error("❌ عذراً، هذا البريد غير مسجل في قائمة هذا الاجتماع. يرجى التأكد من البريد أو تقديم طلب انضمام.")
+                except Exception as e:
+                    st.error(f"حدث خطأ أثناء جلب البيانات: {e}")
+else:
+    st.info("💡 يرجى وضع علامة (صح) على التعهد أعلاه لتفعيل زر الدخول.")
+
+```
+
+جرب الكود الآن على واجهة Streamlit وأخبرني، كيف يبدو المظهر الجديد للبوابة بالنسبة لك؟
