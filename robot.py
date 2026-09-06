@@ -36,12 +36,13 @@ utc_now = datetime.now(pytz.utc)
 baghdad_tz = pytz.timezone("Asia/Baghdad")
 baghdad_now = utc_now.astimezone(baghdad_tz)
 today_str = baghdad_now.strftime("%Y-%m-%d")
-last_week_date_str = (baghdad_now - timedelta(days=7)).strftime("%Y-%m-%d")
+yesterday_date_str = (baghdad_now - timedelta(days=1)).strftime("%Y-%m-%d")
 
 days_ar = {0: "الاثنين", 1: "الثلاثاء", 2: "الأربعاء", 3: "الخميس", 4: "الجمعة", 5: "السبت", 6: "الأحد"}
 today_name = days_ar[baghdad_now.weekday()]
+yesterday_name = days_ar[(baghdad_now.weekday() - 1) % 7]
 
-print(f"🤖 استيقظ الروبوت... اليوم: {today_name} | تاريخ الأسبوع الماضي: {last_week_date_str}")
+print(f"🤖 استيقظ الروبوت... اليوم: {today_name} ({today_str}) | الأمس: {yesterday_name} ({yesterday_date_str})")
 
 # --- HELPER FUNCTIONS ---
 def get_safe_absences(row):
@@ -92,9 +93,9 @@ def send_admin_report(subject, html_body, to_emails):
     except Exception as e:
         print(f"❌ فشل في إرسال تقرير الإدارة: {e}")
 
-# --- MAINTENANCE LOGIC (BOUNCES, 90-DAY RETENTION & 120-DAY CHECK-IN CLEANUP) ---
+# --- MAINTENANCE LOGIC ---
 def run_maintenance(meetings_data):
-    print("🛠️ بدء عملية الصيانة الدورية (المرتجعات، الاحتفاظ بالبيانات، وتنظيف سجلات الحضور)...")
+    print("🛠️ بدء عملية الصيانة الدورية...")
     bounced_emails = set()
     try:
         imap = imaplib.IMAP4_SSL('imap.gmail.com')
@@ -114,12 +115,11 @@ def run_maintenance(meetings_data):
                                 if match:
                                     bounced_emails.add(match.group(1).lower())
         imap.logout()
-        if bounced_emails: print(f"⚠️ تم رصد {len(bounced_emails)} إيميل مرتد (وهمي). سيتم حذفها.")
+        if bounced_emails: print(f"⚠️ تم رصد {len(bounced_emails)} إيميل مرتد. سيتم حذفها.")
     except Exception as e:
-        print(f"❌ خطأ في فحص الإيميلات المرتدة: {e}")
+        pass
 
     unique_targets = meetings_data['Target Sheet ID'].dropna().unique()
-    
     cutoff_date_90 = datetime.now() - timedelta(days=90)
     cutoff_date_120 = datetime.now() - timedelta(days=120)
     
@@ -133,26 +133,18 @@ def run_maintenance(meetings_data):
                 check_in_tab = target_db.worksheet("Check-In Log")
                 check_in_records = check_in_tab.get_all_records()
                 
-                # --- 🟢 تنظيف سجلات الحضور (Check-In Log) الأقدم من 120 يوماً ---
                 ci_rows_to_delete = []
                 for j, ci_row in enumerate(check_in_records):
                     ts = str(ci_row.get('Timestamp', ''))
                     if ts:
                         try:
-                            date_obj = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
-                            if date_obj < cutoff_date_120:
+                            if datetime.strptime(ts, "%Y-%m-%d %H:%M:%S") < cutoff_date_120:
                                 ci_rows_to_delete.append(j + 2)
-                        except:
-                            pass
+                        except: pass
                 
                 for row_num in sorted(list(set(ci_rows_to_delete)), reverse=True):
                     check_in_tab.delete_rows(row_num)
                     time.sleep(1.5)
-                
-                if ci_rows_to_delete:
-                    print(f"🧹 تم مسح {len(ci_rows_to_delete)} سجل حضور قديم (تجاوز 120 يوماً).")
-                # -------------------------------------------------------------
-                
             except:
                 check_in_records = []
                 
@@ -165,8 +157,7 @@ def run_maintenance(meetings_data):
                         date_obj = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
                         if em not in last_seen or date_obj > last_seen[em]:
                             last_seen[em] = date_obj
-                    except:
-                        pass
+                    except: pass
             
             target_info = meetings_data[meetings_data['Target Sheet ID'] == target_id].iloc[0]
             max_abs = int(target_info.get('Max Absences', 4))
@@ -176,11 +167,9 @@ def run_maintenance(meetings_data):
                 em = str(row.get('Email', '')).strip().lower()
                 if not em: continue
                 absences = get_safe_absences(row)
-                
                 if em in bounced_emails:
                     rows_to_delete.append(i + 2)
                     continue
-                    
                 if absences >= max_abs:
                     last_active = last_seen.get(em)
                     if not last_active or last_active < cutoff_date_90:
@@ -189,10 +178,6 @@ def run_maintenance(meetings_data):
             for row_num in sorted(list(set(rows_to_delete)), reverse=True):
                 reg_tab.delete_rows(row_num)
                 time.sleep(1.5)
-                
-            if rows_to_delete:
-                print(f"🧹 تم تنظيف {len(rows_to_delete)} سجل من التسجيل (مرتدة أو متوقفة لـ 90 يوماً).")
-                
         except Exception as e:
             pass
     print("✨ تمت عملية الصيانة بنجاح.")
@@ -206,21 +191,22 @@ def run_robot():
             break
         except Exception as e:
             if attempt < 4:
-                wait_time = 5 * (attempt + 1)
-                print(f"⚠️ سيرفرات جوجل مشغولة. إعادة المحاولة بعد {wait_time} ثوانٍ...")
-                time.sleep(wait_time)
+                time.sleep(5 * (attempt + 1))
             else:
                 raise e
                 
     meetings_data = pd.DataFrame(master_sheet.get_all_records())
     run_maintenance(meetings_data)
     
+    html_list = lambda lst: "".join([f"<li>{e}</li>" for e in sorted(lst)]) if lst else "<li>لا يوجد</li>"
+    admin_emails = "ameermam.sa@gmail.com, keepcomingback.29@gmail.com, sagulf.recovery@gmail.com"
+
     # ==========================================
-    # 1. INTEGRATED LOGIC: CHECK LAST WEEK -> UPDATE EXCEL -> SEND TODAY'S INVITES
+    # 1. أيام الدعوات (الأحد والأربعاء)
     # ==========================================
     today_meeting = meetings_data[meetings_data['Meeting Day'] == today_name]
     if not today_meeting.empty:
-        print(f"📅 تم العثور على اجتماع اليوم ({today_name}). جاري التحضير وفحص حضور الأسبوع الماضي...")
+        print(f"📅 اليوم ({today_name}): يوم مخصص لإرسال دعوات الاجتماع.")
         
         print("🌐 جاري إرسال نبضة لإيقاظ البوابة...")
         for attempt in range(3):
@@ -230,93 +216,35 @@ def run_robot():
                 print("✅ تم إيقاظ البوابة بنجاح!")
                 break
             except urllib.error.HTTPError as e:
-                print(f"✅ البوابة مستيقظة وتتجاوب (رمز الاستجابة: {e.code})!")
+                print(f"✅ البوابة مستيقظة (رمز الاستجابة: {e.code})!")
                 break
             except Exception as e:
                 if attempt < 2: time.sleep(5)
                 else:
-                    print("❌ فشل إيقاظ البوابة، جاري إرسال تنبيه للإدارة...")
-                    alert_subject = "🚨 تنبيه عاجل: فشل إيقاظ بوابة زمالة الخليج"
-                    alert_emails = "ameermam.sa@gmail.com, keepcomingback.29@gmail.com"
-                    alert_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6; text-align: right;">
-                        <h3 style="color: #c62828;">⚠️ تعذر الوصول إلى بوابة تسجيل الحضور</h3>
-                        <p>تفاصيل الخطأ: <span style="direction: ltr; display: inline-block;">{e}</span></p>
-                        <br>🔗 <a href="{PORTAL_LINK}">زيارة البوابة يدوياً</a></div>"""
-                    send_admin_report(alert_subject, alert_body, alert_emails)
+                    send_admin_report("🚨 تنبيه عاجل: فشل إيقاظ البوابة", f'<div dir="rtl">تعذر الوصول للبوابة. الخطأ: {e}</div>', admin_emails)
         
         meeting_info = today_meeting.iloc[0]
         target_id = str(meeting_info['Target Sheet ID']).strip()
         max_abs = int(meeting_info['Max Absences'])
         invite_method = str(meeting_info['Invite Method']).strip()
-        form_link = str(meeting_info.get('Form Link', PORTAL_LINK)).strip()
-        if not form_link: form_link = PORTAL_LINK
+        form_link = str(meeting_info.get('Form Link', PORTAL_LINK)).strip() or PORTAL_LINK
         
         target_db = client.open_by_key(target_id)
-        reg_tab = target_db.worksheet("Registration")
-        reg_df = pd.DataFrame(reg_tab.get_all_records())
+        reg_df = pd.DataFrame(target_db.worksheet("Registration").get_all_records())
         
-        try:
-            check_in_tab = target_db.worksheet("Check-In Log")
-            check_in_df = pd.DataFrame(check_in_tab.get_all_records())
-            
-            # التعديل: تصفية الإيميلات المكررة باستخدام set()
-            raw_attendees = check_in_df[check_in_df['Timestamp'].astype(str).str.contains(last_week_date_str, na=False)]['Email']
-            last_week_attendees = set(raw_attendees.str.lower().str.strip().tolist())
-        except:
-            last_week_attendees = set()
-
-        abs_col_name = 'Absences' if 'Absences' in reg_df.columns else 'الغيابات'
-        abs_col_idx = reg_df.columns.get_loc(abs_col_name) + 1
-
         valid_emails = []
-        removed_emails = []
         warned_emails = []
-        absent_last_week = []
+        removed_emails = []
         
-        # 🟢 الخطوة أ: تحديث الغيابات في الإكسل (بنظام الدفعة الواحدة السريع 🚀)
-        print("🔄 جاري تحليل الغيابات وتحديث الملف (بالنظام السريع)...")
-        num_rows = len(reg_df)
-        
-        if num_rows > 0:
-            cells_to_update = reg_tab.range(2, abs_col_idx, num_rows + 1, abs_col_idx)
-            
-            for index, row in reg_df.iterrows():
-                email = str(row.iloc[1]).strip().lower()
-                if not email: continue
-                
-                current_absences = get_safe_absences(row)
-                new_absences = current_absences
-                
-                if email not in last_week_attendees:
-                    new_absences = current_absences + 1
-                    if new_absences < max_abs:
-                        absent_last_week.append(email)
-                elif current_absences > 0:
-                    new_absences = 0
-                
-                # تحديث الرقم في ذاكرة الروبوت فقط (يستغرق أجزاء من الثانية)
-                cells_to_update[index].value = new_absences
-                
-                # 🟢 الخطوة ب: فرز الأعضاء بناءً على الأرقام المحدثة لتجهيز دعوات اليوم
-                if new_absences >= max_abs:
-                    removed_emails.append(email)
-                else:
-                    valid_emails.append(email)
-                    if new_absences > 0:
-                        warned_emails.append(email)
-
-            # 🚀 إرسال كل التحديثات لجوجل في أمر واحد فقط!
-            reg_tab.update_cells(cells_to_update)
-            print("✅ تم تحديث الغيابات في الإكسل دفعة واحدة بنجاح!")
-
-        # 🟢 الخطوة ج: إرسال الإيميلات
-        if absent_last_week:
-            print(f"⚠️ تجهيز التنبيه لـ {len(absent_last_week)} شخص غابوا الأسبوع الماضي...")
-            notice_subject = "نفتقدك في زمالة الخليج"
-            notice_body = f"مرحباً،\n\nلاحظنا عدم حضورك لاجتماعنا الأخير، ونتمنى أن تكون بخير.\nنفتقد تواجدك معنا، ونتطلع لرؤيتك في اجتماع اليوم.\n\nنحن بالفعل نتعافى!"
-            batch_size = 45
-            for i in range(0, len(absent_last_week), batch_size):
-                create_draft(notice_subject, notice_body, absent_last_week[i:i+batch_size], "BCC", is_html=False)
+        # قراءة البيانات فقط بدون تعديل غيابات
+        for _, row in reg_df.iterrows():
+            email = str(row.iloc[1]).strip().lower()
+            if not email: continue
+            absences = get_safe_absences(row)
+            if absences >= max_abs: removed_emails.append(email)
+            else:
+                valid_emails.append(email)
+                if absences > 0: warned_emails.append(email)
 
         if valid_emails:
             worksheet_names = [ws.title for ws in target_db.worksheets()]
@@ -354,8 +282,8 @@ def run_robot():
                     <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
                     سـيــتـم غــلــق الـغـرفــة بـعـد «20 دقيقة» من بدء الاجتماع<br>
                     <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
-                    🔗 <b>رابط تسجيل الدخول للاجتماع (البوابة) - في حال عدم عمل الموقع يرجى اعادة تحميل الصفحة:</b><br>
-                    <a href="{PORTAL_LINK}" style="color: #15c; text-decoration: underline;">بوابة تسجيل الحضور</a><br><br>
+                    🔗 <b>رابط تسجيل الدخول للاجتماع (البوابة):</b><br>
+                    <a href="{PORTAL_LINK}">{PORTAL_LINK}</a><br><br>
                     بـأنـتـظـار حضوركم !<br>نـحــن بـالـفــعـل نـتـعـافـى 🙏🏼</div>"""
                 create_draft("اعلان اجتماع الخليج", body_html_sun, valid_emails, invite_method, is_html=True)
                 
@@ -377,37 +305,86 @@ def run_robot():
                   <b>لحضور الاجتماع، عليك أن تقوم بالخطوتين التاليتين:</b><br><br>
                   🔗 <b>أولًا: التسجيل لأول مرة فقط:</b><br>
                   <a href="{form_link}">{form_link}</a><br><br>
-                  🔗 <b>ثانياً: لتسجيل الحضور والحصول على الرابط - في حال عدم عمل الموقع، يرجى إعادة تحميل الصفحة:</b><br>
+                  🔗 <b>ثانياً: لتسجيل الحضور والحصول على الرابط:</b><br>
                   <a href="{PORTAL_LINK}">بوابة تسجيل الحضور</a><br><br>
                   نحن بالفعل نتعافى!</div>"""
                 batch_size = 45
                 for i in range(0, len(valid_emails), batch_size):
                     create_draft(f"دعوة زمالة الخليج - {today_str}", body_html, valid_emails[i:i+batch_size], invite_method, is_html=True)
 
-        # 3. إرسال تقرير الإدارة الشامل
-        admin_subject = f"📊 تقرير زمالة الخليج الشامل لاجتماع اليوم - {today_str}"
-        admin_emails = "ameermam.sa@gmail.com, keepcomingback.29@gmail.com, sagulf.recovery@gmail.com"
-        html_list = lambda lst: "".join([f"<li>{e}</li>" for e in sorted(lst)]) if lst else "<li>لا يوجد</li>"
+        admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
+            <h3>✅ تم تجهيز مسودات الدعوات بنجاح لاجتماع اليوم ({today_name})!</h3>
+            <h4 style="color: #2e7d32;">📩 المستلمون للدعوة ({len(valid_emails)}):</h4><ul>{html_list(valid_emails)}</ul>
+            <h4 style="color: #f57c00;">⚠️ أعضاء تحت الإنذار ({len(warned_emails)}):</h4><ul>{html_list(warned_emails)}</ul>
+            <h4 style="color: #c62828;">🚫 أعضاء متجاوزين الحد ({len(removed_emails)}):</h4><ul>{html_list(removed_emails)}</ul></div>"""
+        send_admin_report(f"📊 تقرير دعوات زمالة الخليج - {today_str}", admin_body, admin_emails)
+
+    # ==========================================
+    # 2. أيام المتابعة والغيابات (الاثنين والخميس)
+    # ==========================================
+    yesterday_meeting = meetings_data[meetings_data['Meeting Day'] == yesterday_name]
+    if not yesterday_meeting.empty:
+        print(f"📅 اليوم مخصص لمتابعة غيابات اجتماع الأمس ({yesterday_name}).")
+        meeting_info = yesterday_meeting.iloc[0]
+        target_id = str(meeting_info['Target Sheet ID']).strip()
+        max_abs = int(meeting_info['Max Absences'])
         
-        admin_body = f"""
-        <div dir="rtl" style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6;">
-            <h3>✅ تم الانتهاء من جميع المهام وتجهيز مسودات الإيميلات بنجاح!</h3>
-            <p>قام الروبوت بفحص حضور الأسبوع الماضي (تاريخ: {last_week_date_str})، وقام بتحديث الغيابات في الإكسل، وبناءً عليها أعد الدعوات لاجتماع اليوم.</p>
-            <hr>
-            <h4 style="color: #2e7d32;">📩 قائمة المستلمين للدعوة اليوم ({len(valid_emails)} شخص):</h4>
-            <ul>{html_list(valid_emails)}</ul>
+        target_db = client.open_by_key(target_id)
+        reg_tab = target_db.worksheet("Registration")
+        reg_df = pd.DataFrame(reg_tab.get_all_records())
+        
+        try:
+            check_in_tab = target_db.worksheet("Check-In Log")
+            check_in_df = pd.DataFrame(check_in_tab.get_all_records())
+            # تصفية الإيميلات المكررة لحضور البارحة
+            raw_attendees = check_in_df[check_in_df['Timestamp'].astype(str).str.contains(yesterday_date_str, na=False)]['Email']
+            yesterday_attendees = set(raw_attendees.str.lower().str.strip().tolist())
+        except:
+            yesterday_attendees = set()
+
+        abs_col_name = 'Absences' if 'Absences' in reg_df.columns else 'الغيابات'
+        abs_col_idx = reg_df.columns.get_loc(abs_col_name) + 1
+
+        absent_yesterday = []
+        removed_emails = []
+        
+        print("🔄 جاري تحليل وتحديث الغيابات (بالنظام السريع)...")
+        num_rows = len(reg_df)
+        if num_rows > 0:
+            cells_to_update = reg_tab.range(2, abs_col_idx, num_rows + 1, abs_col_idx)
             
-            <h4 style="color: #1565c0;">⚠️ أشخاص غابوا الأسبوع الماضي وتم إرسال مسودة تنبيه لهم ({len(absent_last_week)} شخص):</h4>
-            <ul>{html_list(absent_last_week)}</ul>
-            
-            <h4 style="color: #f57c00;">⚠️ إجمالي الأعضاء المنذرين في النظام (غياب 1 إلى {max_abs - 1}) ({len(warned_emails)} شخص):</h4>
-            <ul>{html_list(warned_emails)}</ul>
-            
-            <h4 style="color: #c62828;">🚫 أشخاص تجاوزوا الحد الأقصى وتم حذفهم ({len(removed_emails)} شخص):</h4>
-            <ul>{html_list(removed_emails)}</ul>
-        </div>
-        """
-        send_admin_report(admin_subject, admin_body, admin_emails)
+            for index, row in reg_df.iterrows():
+                email = str(row.iloc[1]).strip().lower()
+                if not email: continue
+                
+                current_absences = get_safe_absences(row)
+                new_absences = current_absences
+                
+                if email not in yesterday_attendees:
+                    new_absences = current_absences + 1
+                    if new_absences < max_abs: absent_yesterday.append(email)
+                elif current_absences > 0:
+                    new_absences = 0
+                
+                cells_to_update[index].value = new_absences
+                if new_absences >= max_abs: removed_emails.append(email)
+
+            reg_tab.update_cells(cells_to_update)
+            print("✅ تم تحديث الغيابات في الإكسل بنجاح!")
+
+        if absent_yesterday:
+            print(f"⚠️ تجهيز التنبيه لـ {len(absent_yesterday)} شخص غابوا أمس...")
+            notice_subject = "نفتقدك في زمالة الخليج"
+            notice_body = f"مرحباً،\n\nلاحظنا عدم حضورك لاجتماعنا أمس ({yesterday_name})، ونتمنى أن تكون بخير.\nنفتقد تواجدك معنا، ونتطلع لرؤيتك في الاجتماع القادم.\n\nنحن بالفعل نتعافى!"
+            batch_size = 45
+            for i in range(0, len(absent_yesterday), batch_size):
+                create_draft(notice_subject, notice_body, absent_yesterday[i:i+batch_size], "BCC", is_html=False)
+
+        admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
+            <h3>✅ تم فحص الحضور وتحديث ملف الإكسل لاجتماع الأمس ({yesterday_name})!</h3>
+            <h4 style="color: #1565c0;">⚠️ تم تجهيز إيميلات تنبيه لمن غاب أمس ({len(absent_yesterday)}):</h4><ul>{html_list(absent_yesterday)}</ul>
+            <h4 style="color: #c62828;">🚫 أعضاء متجاوزين الحد وتم شطبهم ({len(removed_emails)}):</h4><ul>{html_list(removed_emails)}</ul></div>"""
+        send_admin_report(f"📊 تقرير المتابعة وتحديث الغيابات - {yesterday_name}", admin_body, admin_emails)
 
 if __name__ == "__main__":
     run_robot()
