@@ -273,32 +273,41 @@ def run_robot():
         warned_emails = []
         absent_last_week = []
         
-        # 🟢 الخطوة أ: تحديث الغيابات في الإكسل بناءً على حضور الأسبوع الماضي
-        for index, row in reg_df.iterrows():
-            email = str(row.iloc[1]).strip().lower()
-            if not email: continue
+        # 🟢 الخطوة أ: تحديث الغيابات في الإكسل (بنظام الدفعة الواحدة السريع 🚀)
+        print("🔄 جاري تحليل الغيابات وتحديث الملف (بالنظام السريع)...")
+        num_rows = len(reg_df)
+        
+        if num_rows > 0:
+            cells_to_update = reg_tab.range(2, abs_col_idx, num_rows + 1, abs_col_idx)
             
-            current_absences = get_safe_absences(row)
-            new_absences = current_absences
-            
-            if email not in last_week_attendees:
-                new_absences = current_absences + 1
-                reg_tab.update_cell(index + 2, abs_col_idx, new_absences)
-                time.sleep(1)
-                if new_absences < max_abs:
-                    absent_last_week.append(email)
-            elif current_absences > 0:
-                new_absences = 0
-                reg_tab.update_cell(index + 2, abs_col_idx, 0)
-                time.sleep(1)
-            
-            # 🟢 الخطوة ب: فرز الأعضاء بناءً على الأرقام المحدثة لتجهيز دعوات اليوم
-            if new_absences >= max_abs:
-                removed_emails.append(email)
-            else:
-                valid_emails.append(email)
-                if new_absences > 0:
-                    warned_emails.append(email)
+            for index, row in reg_df.iterrows():
+                email = str(row.iloc[1]).strip().lower()
+                if not email: continue
+                
+                current_absences = get_safe_absences(row)
+                new_absences = current_absences
+                
+                if email not in last_week_attendees:
+                    new_absences = current_absences + 1
+                    if new_absences < max_abs:
+                        absent_last_week.append(email)
+                elif current_absences > 0:
+                    new_absences = 0
+                
+                # تحديث الرقم في ذاكرة الروبوت فقط (يستغرق أجزاء من الثانية)
+                cells_to_update[index].value = new_absences
+                
+                # 🟢 الخطوة ب: فرز الأعضاء بناءً على الأرقام المحدثة لتجهيز دعوات اليوم
+                if new_absences >= max_abs:
+                    removed_emails.append(email)
+                else:
+                    valid_emails.append(email)
+                    if new_absences > 0:
+                        warned_emails.append(email)
+
+            # 🚀 إرسال كل التحديثات لجوجل في أمر واحد فقط!
+            reg_tab.update_cells(cells_to_update)
+            print("✅ تم تحديث الغيابات في الإكسل دفعة واحدة بنجاح!")
 
         # 🟢 الخطوة ج: إرسال الإيميلات
         if absent_last_week:
