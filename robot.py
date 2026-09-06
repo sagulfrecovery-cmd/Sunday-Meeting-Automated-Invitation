@@ -12,6 +12,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 import pytz
+import urllib.request
 
 # --- CONFIGURATION ---
 MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
@@ -204,6 +205,16 @@ def run_robot():
     # ==========================================
     today_meeting = meetings_data[meetings_data['Meeting Day'] == today_name]
     if not today_meeting.empty:
+        print(f"📅 تم العثور على اجتماع اليوم ({today_name}). جاري التحضير...")
+        
+        # --- إضافة إيقاظ البوابة لاجتماع اليوم ---
+        try:
+            print("🌐 إرسال نبضة لإيقاظ البوابة استعداداً لاجتماع اليوم...")
+            req = urllib.request.Request(PORTAL_LINK, headers={'User-Agent': 'Mozilla/5.0'})
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as e:
+            print(f"⚠️ فشل إرسال النبضة، لكن العمل مستمر. الخطأ: {e}")
+        # ----------------------------------------
         print(f"📅 تم العثور على اجتماع اليوم ({today_name}). جاري التحضير...")
         meeting_info = today_meeting.iloc[0]
         target_id = str(meeting_info['Target Sheet ID']).strip()
