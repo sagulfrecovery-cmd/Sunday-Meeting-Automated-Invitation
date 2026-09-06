@@ -258,9 +258,12 @@ def run_robot():
         try:
             check_in_tab = target_db.worksheet("Check-In Log")
             check_in_df = pd.DataFrame(check_in_tab.get_all_records())
-            last_week_attendees = check_in_df[check_in_df['Timestamp'].astype(str).str.contains(last_week_date_str, na=False)]['Email'].str.lower().str.strip().tolist()
+            
+            # التعديل: تصفية الإيميلات المكررة باستخدام set()
+            raw_attendees = check_in_df[check_in_df['Timestamp'].astype(str).str.contains(last_week_date_str, na=False)]['Email']
+            last_week_attendees = set(raw_attendees.str.lower().str.strip().tolist())
         except:
-            last_week_attendees = []
+            last_week_attendees = set()
 
         abs_col_name = 'Absences' if 'Absences' in reg_df.columns else 'الغيابات'
         abs_col_idx = reg_df.columns.get_loc(abs_col_name) + 1
