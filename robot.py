@@ -207,15 +207,39 @@ def run_robot():
     if not today_meeting.empty:
         print(f"📅 تم العثور على اجتماع اليوم ({today_name}). جاري التحضير...")
         
-        # --- إضافة إيقاظ البوابة لاجتماع اليوم ---
-        try:
-            print("🌐 إرسال نبضة لإيقاظ البوابة استعداداً لاجتماع اليوم...")
-            req = urllib.request.Request(PORTAL_LINK, headers={'User-Agent': 'Mozilla/5.0'})
-            urllib.request.urlopen(req, timeout=10)
-        except Exception as e:
-            print(f"⚠️ فشل إرسال النبضة، لكن العمل مستمر. الخطأ: {e}")
+        # --- إضافة إيقاظ البوابة لاجتماع اليوم (مع نظام المحاولات وإنذار الطوارئ) ---
+        print("🌐 جاري إرسال نبضة لإيقاظ البوابة استعداداً لاجتماع اليوم...")
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(PORTAL_LINK, headers={'User-Agent': 'Mozilla/5.0'})
+                urllib.request.urlopen(req, timeout=10)
+                print("✅ تم إيقاظ البوابة بنجاح!")
+                break # إذا نجحت النبضة، اخرج من الحلقة
+            except Exception as e:
+                if attempt < 2:
+                    print(f"⚠️ فشلت المحاولة {attempt + 1}. إعادة المحاولة بعد 5 ثوانٍ...")
+                    time.sleep(5)
+                else:
+                    print(f"❌ فشل إرسال النبضة بعد 3 محاولات. جاري إرسال تنبيه للإدارة...")
+                    
+                    # 📨 تجهيز وإرسال إيميل الإنذار
+                    alert_subject = "🚨 تنبيه عاجل: فشل إيقاظ بوابة زمالة الخليج"
+                    alert_emails = "ameermam.sa@gmail.com, keepcomingback.29@gmail.com"
+                    alert_body = f"""
+                    <div dir="rtl" style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; text-align: right;">
+                        <h3 style="color: #c62828;">⚠️ تعذر الوصول إلى بوابة تسجيل الحضور</h3>
+                        <p>مرحباً،</p>
+                        <p>حاول الروبوت إيقاظ بوابة التسجيل (Streamlit) 3 مرات متتالية ولكنه فشل في ذلك.</p>
+                        <p><strong>تفاصيل الخطأ التقني:</strong> <span style="direction: ltr; display: inline-block;">{e}</span></p>
+                        <p>الروبوت سيستمر في إرسال مسودات الدعوات بشكل طبيعي، لكن يرجى التحقق من البوابة يدوياً بالضغط على الرابط أدناه للتأكد من أنها تعمل قبل موعد الاجتماع.</p>
+                        <br>
+                        🔗 <a href="{PORTAL_LINK}" style="color: #15c; text-decoration: underline;">زيارة البوابة يدوياً</a>
+                    </div>
+                    """
+                    # استخدام دالة إرسال تقارير الإدارة الموجودة مسبقاً في الكود
+                    send_admin_report(alert_subject, alert_body, alert_emails)
         # ----------------------------------------
-        print(f"📅 تم العثور على اجتماع اليوم ({today_name}). جاري التحضير...")
+        
         meeting_info = today_meeting.iloc[0]
         target_id = str(meeting_info['Target Sheet ID']).strip()
         max_abs = int(meeting_info['Max Absences'])
@@ -289,7 +313,7 @@ def run_robot():
                     <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
                     سـيــتـم غــلــق الـغـرفــة بـعـد «20 دقيقة» من بدء الاجتماع<br>
                     <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
-                    🔗 <b>رابط تسجيل الدخول للاجتماع (البوابة):</b><br>
+                    🔗 <b>رابط تسجيل الدخول للاجتماع (البوابة) - في حال عدم عمل الموقع يرجى اعادة تحميل الصفحة:</b><br>
                     <a href="{PORTAL_LINK}" style="color: #15c; text-decoration: underline;">بوابة تسجيل الحضور</a><br><br>
                     بـأنـتـظـار حضوركم !<br>
                     نـحــن بـالـفــعـل نـتـعـافـى 🙏🏼
@@ -320,7 +344,7 @@ def run_robot():
                   🔗 <b>أولًا: التسجيل لأول مرة فقط حتى يتم عمل حساب لك في زمالة الخليج، لو سجلت سابقا فلا داعي للتسجيل مرة أخرى :</b><br>
                   <a href="{form_link}" style="color: #15c; text-decoration: underline;">{form_link}</a><br><br>
                   
-                  🔗 <b>بعد عمل الحساب، تستطيع الدخول إلى هنا واختيار الاجتماع الذي سجلت فيه وادخال إيميلك الذي استخدمته في التسجيل للوصول إلى رابط الاجتماع:</b><br>
+                  🔗 <b>بعد عمل الحساب، تستطيع الدخول إلى هنا واختيار الاجتماع الذي سجلت فيه وادخال إيميلك الذي استخدمته في التسجيل للوصول إلى رابط الاجتماع - في حال عدم عمل الموقع، يرجى إعادة تحميل الصفحة:</b><br>
                   <a href="{PORTAL_LINK}" style="color: #15c; text-decoration: underline;">بوابة تسجيل الحضور</a><br><br>
                   
                   نحن بالفعل نتعافى!</div>"""
@@ -352,7 +376,7 @@ def run_robot():
             """
             send_admin_report(admin_subject_1, admin_body_1, admin_emails_1)
 
-# ==========================================
+    # ==========================================
     # 2. YESTERDAY'S LOGIC (GENTLE NOTICES AS DRAFTS + UPDATE EXCEL)
     # ==========================================
     yesterday_meeting = meetings_data[meetings_data['Meeting Day'] == yesterday_name]
