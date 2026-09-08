@@ -1,4 +1,3 @@
-import os
 import json
 import pandas as pd
 import gspread
@@ -16,7 +15,7 @@ import urllib.request
 import urllib.error
 
 # --- CONFIGURATION ---
-MASTER_SHEET_ID = os.environ.get("MASTER_SHEET_ID")
+MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 PORTAL_LINK = "https://sagulf-recovery-meeting-registration-and-check-in-2026.streamlit.app/"
 
