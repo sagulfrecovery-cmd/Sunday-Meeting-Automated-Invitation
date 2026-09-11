@@ -39,8 +39,42 @@ def send_zoom_email(recipient_email, meeting_day, zoom_link):
     except Exception:
         pass 
 
-# --- UI SETUP ---
+# --- UI SETUP (Page config must be first Streamlit call) ---
 st.set_page_config(page_title="بوابة زمالة الخليج", page_icon="📖")
+
+# ==========================================
+# ⏰ نظام قفل البوابة حسب الوقت (توقيت بغداد)
+# ==========================================
+baghdad_tz = pytz.timezone("Asia/Baghdad")
+now = datetime.now(baghdad_tz)
+weekday = now.weekday()  # 6 = الأحد، 2 = الأربعاء
+
+is_open = False
+
+# --- Sunday window: 6:00 PM – 9:30 PM ---
+if weekday == 6:
+    if (18 <= now.hour < 21) or (now.hour == 21 and now.minute <= 30):
+        is_open = True
+
+# --- Wednesday window: 6:00 PM – 9:00 PM ---
+elif weekday == 2:
+    if 18 <= now.hour < 21:
+        is_open = True
+
+if not is_open:
+    st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
+    st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
+    st.info(
+        "يُفتح التسجيل فقط في أيام الاجتماعات:\n\n"
+        "- **الأحد:** من الساعة 6:00 مساءً حتى 9:30 مساءً\n"
+        "- **الأربعاء:** من الساعة 6:00 مساءً حتى 9:00 مساءً\n"
+        "*(بتوقيت بغداد)*"
+    )
+    st.stop()  # إيقاف التنفيذ هنا
+
+# ==========================================
+# ✅ واجهة التطبيق الرئيسية (تظهر فقط وقت السماح)
+# ==========================================
 st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
