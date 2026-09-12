@@ -208,12 +208,19 @@ def run_robot():
     if not today_meeting.empty:
         print(f"📅 اليوم ({today_name}): يوم مخصص لإرسال دعوات الاجتماع.")
         
-        print("🌐 جاري إرسال نبضة لإيقاظ البوابة...")
+        print("🌐 جاري إرسال نبضة قوية لإيقاظ البوابة...")
         for attempt in range(3):
             try:
-                req = urllib.request.Request(PORTAL_LINK, headers={'User-Agent': 'Mozilla/5.0'})
-                urllib.request.urlopen(req, timeout=10)
-                print("✅ تم إيقاظ البوابة بنجاح!")
+                # إضافة طابع زمني للرابط لتجاوز الذاكرة المخبأة (Cache-Busting)
+                no_cache_url = f"{PORTAL_LINK.rstrip('/')}/?wake={int(time.time())}"
+                
+                # استخدام User-Agent يحاكي متصفح حقيقي
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+                
+                req = urllib.request.Request(no_cache_url, headers=headers)
+                urllib.request.urlopen(req, timeout=15)
+                
+                print("✅ تم إيقاظ البوابة بنجاح (متجاوزاً الكاش)!")
                 break
             except urllib.error.HTTPError as e:
                 print(f"✅ البوابة مستيقظة (رمز الاستجابة: {e.code})!")
