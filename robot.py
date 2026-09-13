@@ -52,7 +52,7 @@ def get_safe_absences(row):
     except (ValueError, TypeError):
         return 0
 
-def create_draft(subject, body, emails, invite_method, is_html=False):
+def create_draft(subject, body, emails, invite_method, is_html=False, static_to=None):
     if not emails: return
     
     if is_html:
@@ -64,8 +64,21 @@ def create_draft(subject, body, emails, invite_method, is_html=False):
     msg['Subject'] = subject
     msg['From'] = SENDER_EMAIL
     
+    # تحديد خانة TO إذا تم تمرير إيميل ثابت (مثل اجتماع الأربعاء)
+    if static_to:
+        msg['To'] = static_to
+    
+    # توزيع إيميلات الأعضاء بناءً على الطريقة المطلوبة
     if invite_method.upper() == 'BCC':
         msg['Bcc'] = ", ".join(emails)
+    elif invite_method.upper() == 'CC':
+        msg['Cc'] = ", ".join(emails)
+    elif invite_method.upper() == 'TO':
+        # إذا كان هناك إيميل ثابت مسبقاً في TO، نضيف إليه إيميلات الأعضاء، وإلا نضع إيميلات الأعضاء فقط في TO
+        if static_to:
+            msg['To'] = static_to + ", " + ", ".join(emails)
+        else:
+            msg['To'] = ", ".join(emails)
     else:
         msg['Cc'] = ", ".join(emails)
         
@@ -211,15 +224,10 @@ def run_robot():
         print("🌐 جاري إرسال نبضة قوية لإيقاظ البوابة...")
         for attempt in range(3):
             try:
-                # إضافة طابع زمني للرابط لتجاوز الذاكرة المخبأة (Cache-Busting)
                 no_cache_url = f"{PORTAL_LINK.rstrip('/')}/?wake={int(time.time())}"
-                
-                # استخدام User-Agent يحاكي متصفح حقيقي
                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-                
                 req = urllib.request.Request(no_cache_url, headers=headers)
                 urllib.request.urlopen(req, timeout=15)
-                
                 print("✅ تم إيقاظ البوابة بنجاح (متجاوزاً الكاش)!")
                 break
             except urllib.error.HTTPError as e:
@@ -243,18 +251,19 @@ def run_robot():
         warned_emails = []
         removed_emails = []
         
-        # قراءة البيانات فقط بدون تعديل غيابات
         for _, row in reg_df.iterrows():
-            email = str(row.iloc[1]).strip().lower()
-            if not email: continue
+            email_addr = str(row.iloc[1]).strip().lower()
+            if not email_addr: continue
             absences = get_safe_absences(row)
-            if absences >= max_abs: removed_emails.append(email)
+            if absences >= max_abs: removed_emails.append(email_addr)
             else:
-                valid_emails.append(email)
-                if absences > 0: warned_emails.append(email)
+                valid_emails.append(email_addr)
+                if absences > 0: warned_emails.append(email_addr)
 
         if valid_emails:
             worksheet_names = [ws.title for ws in target_db.worksheets()]
+            
+            # --- قسم اجتماع الأحد ---
             if "اجتماع اليوم" in worksheet_names:
                 print("📝 استخدام القالب الجديد HTML (اجتماع الأحد)...")
                 try:
@@ -292,8 +301,11 @@ def run_robot():
                     🔗 <b>رابط تسجيل الدخول للاجتماع (البوابة):</b><br>
                     <a href="{PORTAL_LINK}">{PORTAL_LINK}</a><br><br>
                     بـأنـتـظـار حضوركم !<br>نـحــن بـالـفــعـل نـتـعـافـى 🙏🏼</div>"""
-                create_draft("اعلان اجتماع الخليج", body_html_sun, valid_emails, invite_method, is_html=True)
                 
+                # التعديل هنا: إجبار الكود على وضع جميع الأعضاء في خانة TO لاجتماع الأحد
+                create_draft("اعلان اجتماع الخليج", body_html_sun, valid_emails, "TO", is_html=True)
+                
+            # --- قسم اجتماع الأربعاء ---
             elif "Meetings" in worksheet_names:
                 print("🎨 استخدام قالب HTML (Meetings)...")
                 meeting_topic = "موضوع غير محدد"
@@ -305,36 +317,21 @@ def run_robot():
                             break
                 except: pass
 
-                body_html = f"""<div dir="rtl" style="text-align: right; font-family: Arial; font-size: 16px; line-height: 1.8;">
+                body_html = f"""<div dir="rtl" style="text-align: right; font-family: Arial; font-size: 16px; line-height: 1.6;">
                   ༺ يرجى قراءة الإعلان جيدًا ༻<br><br>
                   تدعوكم ༺ زمالة الخليج ༻ إلى اجتماع اليوم: <b>{meeting_topic}</b><br>
                   {today_name} الموافق {today_str.replace('-', '/')}<br><br>
-
-                  📝 <b>خطوات حضور اجتماع "زمالة الخليج" ليوم الاربعاء:</b><br><br>
-
-                  <b>الخطوة الأولى: التسجيل في الزمالة (تُنفذ لمرة واحدة فقط)</b><br>
-                  إذا كنت عضواً جديداً ولم يسبق لك الانضمام، يجب عليك أولاً ملء استمارة التسجيل الأساسية.<br>
-                  • (هذه الخطوة تُفعل لمرة واحدة فقط في بداية انضمامك للمجموعة لإنشاء ملفك).<br>
-                  🔗 <a href="{form_link}">{form_link}</a><br><br>
-
-                  <b>الخطوة الثانية: إثبات الحضور واستلام الرابط (تُنفذ في كل اجتماع)</b><br>
-                  في يوم الاجتماع (الأربعاء)، وكي تتمكن من الدخول للقاعة، يرجى اتباع الآتي:<br>
-                  • الدخول إلى بوابة تسجيل الحضور الإلكترونية.<br>
-                  • إدخال بريدك الإلكتروني (الإيميل) الذي سجلت به مسبقاً.<br>
-                  • بمجرد ضغطك على زر تسجيل الحضور، سيظهر لك فوراً رابط قاعة الاجتماع لتدخل مباشرة.<br>
-                  🔗 <a href="{PORTAL_LINK}">بوابة تسجيل الحضور</a><br><br>
-
-                  🚨 <b>تنبيهات إدارية وتقنية هامة</b><br>
-                  • ⏱️ <b>إغلاق القاعة:</b> يُغلق باب الدخول للاجتماع تماماً بعد مرور 20 دقيقة من وقت البدء الرسمي. يرجى الحرص على الدخول مبكراً.<br>
-                  • ⏳ <b>مدة الاجتماع:</b> يستمر الاجتماع لمدة 70 دقيقة.<br>
-                  • 🔄 <b>حلول تقنية:</b> إذا قمت بفتح "بوابة تسجيل الحضور" وواجهت أي بطء أو لم يفتح الموقع، كل ما عليك فعله هو إغلاق الصفحة وإعادة فتحها، أو عمل تحديث (Refresh) للصفحة.<br>
-                  • 📊 <b>احتساب الحضور:</b> النظام الآلي يعتمد كلياً على تسجيلك في "البوابة" (الخطوة الثانية) لإثبات حضورك. بمجرد تسجيلك، سيقوم النظام تلقائياً بمسح أي غيابات سابقة لك.<br>
-                  • 🛡 <b>سياسة الغياب:</b> نحن نتفهم ظروف الجميع، ولكن للحفاظ على فعالية ومساحة المجموعة، يقوم النظام آلياً بإلغاء تسجيل أي عضو يتجاوز الحد الأقصى المسموح به من الغيابات المتتالية لترك المجال لمن هم بحاجة حقيقية للتواجد.<br><br>
-
+                  <b>لحضور الاجتماع، عليك أن تقوم بالخطوتين التاليتين:</b><br><br>
+                  🔗 <b>أولًا: التسجيل لأول مرة فقط:</b><br>
+                  <a href="{form_link}">{form_link}</a><br><br>
+                  🔗 <b>ثانياً: لتسجيل الحضور والحصول على الرابط:</b><br>
+                  <a href="{PORTAL_LINK}">بوابة تسجيل الحضور</a><br><br>
                   نحن بالفعل نتعافى!</div>"""
+                
                 batch_size = 45
                 for i in range(0, len(valid_emails), batch_size):
-                    create_draft(f"دعوة زمالة الخليج - {today_str}", body_html, valid_emails[i:i+batch_size], invite_method, is_html=True)
+                    # التعديل هنا: وضع sagulf.recovery@gmail.com في خانة TO وباقي الأعضاء حسب المتغير invite_method
+                    create_draft(f"دعوة زمالة الخليج - {today_str}", body_html, valid_emails[i:i+batch_size], invite_method, is_html=True, static_to="sagulf.recovery@gmail.com")
 
         admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
             <h3>✅ تم تجهيز مسودات الدعوات بنجاح لاجتماع اليوم ({today_name})!</h3>
@@ -360,7 +357,6 @@ def run_robot():
         try:
             check_in_tab = target_db.worksheet("Check-In Log")
             check_in_df = pd.DataFrame(check_in_tab.get_all_records())
-            # تصفية الإيميلات المكررة لحضور البارحة
             raw_attendees = check_in_df[check_in_df['Timestamp'].astype(str).str.contains(yesterday_date_str, na=False)]['Email']
             yesterday_attendees = set(raw_attendees.str.lower().str.strip().tolist())
         except:
@@ -378,20 +374,20 @@ def run_robot():
             cells_to_update = reg_tab.range(2, abs_col_idx, num_rows + 1, abs_col_idx)
             
             for index, row in reg_df.iterrows():
-                email = str(row.iloc[1]).strip().lower()
-                if not email: continue
+                email_addr = str(row.iloc[1]).strip().lower()
+                if not email_addr: continue
                 
                 current_absences = get_safe_absences(row)
                 new_absences = current_absences
                 
-                if email not in yesterday_attendees:
+                if email_addr not in yesterday_attendees:
                     new_absences = current_absences + 1
-                    if new_absences < max_abs: absent_yesterday.append(email)
+                    if new_absences < max_abs: absent_yesterday.append(email_addr)
                 elif current_absences > 0:
                     new_absences = 0
                 
                 cells_to_update[index].value = new_absences
-                if new_absences >= max_abs: removed_emails.append(email)
+                if new_absences >= max_abs: removed_emails.append(email_addr)
 
             reg_tab.update_cells(cells_to_update)
             print("✅ تم تحديث الغيابات في الإكسل بنجاح!")
