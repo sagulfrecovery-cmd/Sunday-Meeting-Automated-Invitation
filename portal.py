@@ -5,14 +5,39 @@ from google.oauth2.service_account import Credentials
 import json
 import smtplib
 from email.mime.text import MIMEText
-from datetime import datetime
+from datetime import datetime, time as dt_time
 import pytz
 
 # --- CONFIGURATION ---
 MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
+# ==========================================
+# ⏰ إعدادات أوقات البوابة (يمكنك التعديل هنا)
+# النظام يستخدم 24 ساعة (مثلاً 18 تعني 6 مساءً)
+# ==========================================
+
+# أوقات يوم الأحد
+SUN_OPEN_HOUR, SUN_OPEN_MIN = 18, 0    # 6:00 PM
+SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 30 # 9:30 PM
+
+# أوقات يوم الأربعاء
+WED_OPEN_HOUR, WED_OPEN_MIN = 18, 0    # 6:00 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 21, 0  # 9:00 PM
+
+# مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق - تستخدم في رسالة التنبيه)
+ROOM_LOCK_MINUTES = 20
+
+# ==========================================
+
 # --- HELPER FUNCTIONS ---
+def format_time_arabic(hour, minute):
+    """دالة لتحويل الوقت من 24 ساعة إلى 12 ساعة مع صباحاً/مساءً بشكل آلي"""
+    period = "مساءً" if hour >= 12 else "صباحاً"
+    h12 = hour % 12
+    h12 = 12 if h12 == 0 else h12
+    return f"{h12}:{minute:02d} {period}"
+
 @st.cache_resource
 def get_google_client():
     creds_dict = json.loads(st.secrets["gcp_service_account"])
@@ -48,27 +73,38 @@ st.set_page_config(page_title="بوابة زمالة الخليج", page_icon="�
 baghdad_tz = pytz.timezone("Asia/Baghdad")
 now = datetime.now(baghdad_tz)
 weekday = now.weekday()  # 6 = الأحد، 2 = الأربعاء
+now_time = now.time()
+
+# توليد النصوص آلياً بناءً على الإعدادات أعلاه
+sun_open_str = format_time_arabic(SUN_OPEN_HOUR, SUN_OPEN_MIN)
+sun_close_str = format_time_arabic(SUN_CLOSE_HOUR, SUN_CLOSE_MIN)
+wed_open_str = format_time_arabic(WED_OPEN_HOUR, WED_OPEN_MIN)
+wed_close_str = format_time_arabic(WED_CLOSE_HOUR, WED_CLOSE_MIN)
 
 is_open = False
 
-# --- Sunday window: 6:00 PM – 9:30 PM ---
-if weekday == 6:
-    if (18 <= now.hour < 21) or (now.hour == 21 and now.minute <= 30):
-        is_open = True
+# تحويل إعدادات الوقت إلى كائنات datetime.time للمقارنة
+sun_open_time = dt_time(SUN_OPEN_HOUR, SUN_OPEN_MIN)
+sun_close_time = dt_time(SUN_CLOSE_HOUR, SUN_CLOSE_MIN)
+wed_open_time = dt_time(WED_OPEN_HOUR, WED_OPEN_MIN)
+wed_close_time = dt_time(WED_CLOSE_HOUR, WED_CLOSE_MIN)
 
-# --- Wednesday window: 6:00 PM – 9:00 PM ---
-elif weekday == 2:
-    if 18 <= now.hour < 21:
+if weekday == 6: # الأحد
+    if sun_open_time <= now_time <= sun_close_time:
+        is_open = True
+elif weekday == 2: # الأربعاء
+    if wed_open_time <= now_time <= wed_close_time:
         is_open = True
 
 if not is_open:
     st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
     st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
+    # عرض الأوقات ديناميكياً
     st.info(
-        "يُفتح التسجيل فقط في أيام الاجتماعات:\n\n"
-        "- **الأحد:** من الساعة 6:00 مساءً حتى 9:30 مساءً\n"
-        "- **الأربعاء:** من الساعة 6:00 مساءً حتى 9:00 مساءً\n"
-        "*(بتوقيت بغداد)*"
+        f"يُفتح التسجيل فقط في أيام الاجتماعات:\n\n"
+        f"- **الأحد:** من الساعة {sun_open_str} حتى {sun_close_str}\n"
+        f"- **الأربعاء:** من الساعة {wed_open_str} حتى {wed_close_str}\n"
+        f"*(بتوقيت بغداد)*"
     )
     st.stop()  # إيقاف التنفيذ هنا
 
@@ -77,6 +113,15 @@ if not is_open:
 # ==========================================
 st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
 st.markdown("---")
+
+# رسالة التنبيه باللون الأحمر، والتي تتأثر برقم الدقائق المحدد في الكود
+st.markdown(f"""
+<div style="background-color: #ffe6e6; padding: 15px; border-radius: 8px; border: 2px solid red; text-align: center; margin-bottom: 25px;">
+    <h3 style="color: #c62828; margin: 0; font-weight: bold; line-height: 1.4;">
+        ⚠️ يرجى العلم أن الغرفة ستغلق بعد {ROOM_LOCK_MINUTES} دقيقة من بداية الاجتماع ولن يتم قبول أي شخص بعد هذا الوقت.
+    </h3>
+</div>
+""", unsafe_allow_html=True)
 
 # --- MAIN LOGIC ---
 try:
@@ -89,7 +134,7 @@ except Exception as e:
     st.stop()
 
 # Build the Input Form
-selected_meeting = st.selectbox("اختر يوم الاجتماع (Select Meeting Day):", available_meetings)
+selected_meeting = st.radio("اختر يوم الاجتماع (Select Meeting Day):", available_meetings, horizontal=True)
 user_email = st.text_input("البريد الإلكتروني المسجل (Registered Email):").strip().lower()
 
 # --- عهد التعافي (Recovery Pledge) ---
