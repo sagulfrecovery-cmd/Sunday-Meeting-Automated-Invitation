@@ -23,7 +23,7 @@ SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20 # 9:20 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 18, 0    # 6:00 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 21, 40  # 8:50 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 20, 50  # 9:00 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق - تستخدم في رسالة التنبيه)
 ROOM_LOCK_MINUTES = 20
@@ -41,7 +41,6 @@ def format_time_arabic(hour, minute):
 @st.cache_resource
 def get_google_client():
     creds_dict = json.loads(st.secrets["gcp_service_account"])
-    # This magic line forces the security key into the perfect format, preventing MalformedFraming:
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
@@ -83,30 +82,28 @@ wed_close_str = format_time_arabic(WED_CLOSE_HOUR, WED_CLOSE_MIN)
 
 is_open = False
 
-# تحويل إعدادات الوقت إلى كائنات datetime.time للمقارنة
 sun_open_time = dt_time(SUN_OPEN_HOUR, SUN_OPEN_MIN)
 sun_close_time = dt_time(SUN_CLOSE_HOUR, SUN_CLOSE_MIN)
 wed_open_time = dt_time(WED_OPEN_HOUR, WED_OPEN_MIN)
 wed_close_time = dt_time(WED_CLOSE_HOUR, WED_CLOSE_MIN)
 
-if weekday == 6: # الأحد
+if weekday == 6: 
     if sun_open_time <= now_time <= sun_close_time:
         is_open = True
-elif weekday == 2: # الأربعاء
+elif weekday == 2: 
     if wed_open_time <= now_time <= wed_close_time:
         is_open = True
 
 if not is_open:
     st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
     st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
-    # عرض الأوقات ديناميكياً
     st.info(
         f"يُفتح التسجيل فقط في أيام الاجتماعات:\n\n"
         f"- **الأحد:** من الساعة {sun_open_str} حتى {sun_close_str}\n"
         f"- **الأربعاء:** من الساعة {wed_open_str} حتى {wed_close_str}\n"
-        f"*(بتوقيت بغداد)*\n"
+        f"*(بتوقيت بغداد)*"
     )
-    st.stop()  # إيقاف التنفيذ هنا
+    st.stop()  
 
 # ==========================================
 # ✅ واجهة التطبيق الرئيسية (تظهر فقط وقت السماح)
@@ -114,7 +111,7 @@ if not is_open:
 st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
-# رسالة التنبيه باللون الأحمر، والتي تتأثر برقم الدقائق المحدد في الكود
+# رسالة التنبيه باللون الأحمر العريض
 st.markdown(f"""
 <div style="background-color: #ffe6e6; padding: 15px; border-radius: 8px; border: 2px solid red; text-align: center; margin-bottom: 25px;">
     <h3 style="color: #c62828; margin: 0; font-weight: bold; line-height: 1.4;">
@@ -133,8 +130,32 @@ except Exception as e:
     st.error(f"System Error: {e}")
     st.stop()
 
-# Build the Input Form
-selected_meeting = st.radio("اختر يوم الاجتماع (Select Meeting Day):", available_meetings, horizontal=True)
+# Build the Input Form - باستخدام أزرار كبيرة ومستقلة
+st.markdown("### 📅 اختر يوم الاجتماع (Select Meeting Day):")
+
+if available_meetings:
+    # تهيئة المتغير إذا لم يكن موجوداً
+    if "selected_meeting" not in st.session_state:
+        st.session_state.selected_meeting = available_meetings[0]
+
+    # إنشاء أعمدة ديناميكية بناءً على عدد الاجتماعات
+    cols = st.columns(len(available_meetings))
+    for i, meeting_day in enumerate(available_meetings):
+        with cols[i]:
+            # تمييز الزر المختار بلون مختلف (primary)
+            btn_type = "primary" if st.session_state.selected_meeting == meeting_day else "secondary"
+            if st.button(f"اجتماع {meeting_day}", use_container_width=True, type=btn_type):
+                st.session_state.selected_meeting = meeting_day
+                st.rerun() # تحديث الواجهة فوراً لتغيير الألوان
+
+    # إظهار اليوم المختار حالياً للتأكيد
+    st.info(f"📌 اليوم المحدد للتسجيل حالياً: **{st.session_state.selected_meeting}**")
+    selected_meeting = st.session_state.selected_meeting
+else:
+    st.warning("لا توجد اجتماعات متاحة حالياً.")
+    st.stop()
+
+st.markdown("<br>", unsafe_allow_html=True)
 user_email = st.text_input("البريد الإلكتروني المسجل (Registered Email):").strip().lower()
 
 # --- عهد التعافي (Recovery Pledge) ---
@@ -142,7 +163,6 @@ st.markdown("---")
 st.markdown("### 🤝 عهد التعافي")
 pledge = st.checkbox("أتعهد بصدق وأمانة أمام نفسي وتجاه زمالتي، أنني أسجل الآن بنية الحضور الفعلي للاجتماع في وقته المحدد.")
 
-# لن يتم تفعيل الزر إلا إذا قام العضو بتأكيد التعهد
 if pledge:
     if st.button("تسجيل الحضور وعرض الرابط (Check-In)", use_container_width=True):
         if not user_email:
