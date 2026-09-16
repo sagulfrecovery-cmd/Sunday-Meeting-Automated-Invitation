@@ -19,11 +19,11 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # أوقات يوم الأحد
 SUN_OPEN_HOUR, SUN_OPEN_MIN = 18, 0    # 6:00 PM
-SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20 # 9:20 PM
+SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 30 # 9:30 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 18, 0    # 6:00 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 22, 50  # 9:00 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 21, 0  # 9:00 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق - تستخدم في رسالة التنبيه)
 ROOM_LOCK_MINUTES = 20
@@ -115,7 +115,7 @@ st.markdown("---")
 st.markdown(f"""
 <div style="background-color: #ffe6e6; padding: 15px; border-radius: 8px; border: 2px solid red; text-align: center; margin-bottom: 25px;">
     <h3 style="color: #c62828; margin: 0; font-weight: bold; line-height: 1.4;">
-        ⚠️ يرجى العلم أن الغرفة ستغلق بعد {ROOM_LOCK_MINUTES} دقيقة من بداية الاجتماع ولن يتم قبول أي شخص بعد هذا الوقت
+        ⚠️ يرجى العلم أن الغرفة ستغلق بعد {ROOM_LOCK_MINUTES} دقيقة من بداية الاجتماع ولن يتم قبول أي شخص بعد هذا الوقت.
     </h3>
 </div>
 """, unsafe_allow_html=True)
@@ -195,7 +195,8 @@ if pledge:
                         st.success("✅ تم تسجيل حضورك بنجاح! شكراً لأمانتك، تم إرسال الرابط إلى بريدك الإلكتروني.")
                         st.info(f"🔗 **رابط زووم المباشر:**\n\n{zoom_link}")
                     else:
-                        st.error("❌ عذراً، هذا البريد غير مسجل في قائمة هذا الاجتماع. يرجى التأكد من البريد أو تقديم طلب انضمام.")
+                        # التعديل هنا: رسالة ديناميكية تتضمن اسم الاجتماع
+                        st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التأكد من البريد أو تقديم طلب انضمام.")
                 except Exception as e:
                     st.error(f"حدث خطأ أثناء جلب البيانات: {e}")
 else:
