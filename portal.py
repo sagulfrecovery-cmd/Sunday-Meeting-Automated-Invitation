@@ -115,7 +115,7 @@ st.markdown("---")
 st.markdown(f"""
 <div style="background-color: #ffe6e6; padding: 15px; border-radius: 8px; border: 2px solid red; text-align: center; margin-bottom: 25px;">
     <h3 style="color: #c62828; margin: 0; font-weight: bold; line-height: 1.4;">
-        ⚠️ يرجى العلم أن الغرفة ستغلق بعد {ROOM_LOCK_MINUTES} دقيقة من بداية الاجتماع ولن يتم قبول أي شخص بعد هذا الوقت.
+        ⚠️ يرجى العلم أن الغرفة ستغلق بعد {ROOM_LOCK_MINUTES} دقيقة من بداية الاجتماع ولن يتم قبول أي شخص بعد هذا الوقت
     </h3>
 </div>
 """, unsafe_allow_html=True)
