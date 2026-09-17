@@ -3,3 +3,4 @@ pandas
 gspread
 oauth2client
 pytz
+python-telegram-bot>=20.0
