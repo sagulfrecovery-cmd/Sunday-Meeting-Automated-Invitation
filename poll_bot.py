@@ -3,18 +3,18 @@ import asyncio
 import os
 import requests
 from telethon import TelegramClient
-from telethon.sessions import MemorySession  # New import added
+from telethon.sessions import MemorySession
 from telethon.tl.functions.messages import GetPollVotesRequest
 
 st.set_page_config(page_title="Telegram Purge Bot")
 st.title("Group Purge Control")
 
-# Securely fetch credentials from Streamlit Secrets or Environment Variables
+# Securely fetch credentials from Streamlit Secrets
 API_ID = int(os.environ.get("TELEGRAM_API_ID", 39111225))
 API_HASH = os.environ.get("TELEGRAM_API_HASH", "8d6b777cfce01184cd4a0cb7b227030a")
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
-group_id = st.text_input("Target Group Username (e.g., @mygroup)")
+group_id = st.text_input("Target Group ID (e.g., -1002844744618)")
 
 # ==========================================
 # SECTION 1: Deploy Poll
@@ -45,7 +45,7 @@ if st.button("Send Attendance Poll"):
         else:
             st.error(f"Failed to send poll: {res}")
     else:
-        st.warning("Please enter a group username.")
+        st.warning("Please enter a group ID.")
 
 # ==========================================
 # SECTION 2: Execute Purge
@@ -54,25 +54,24 @@ st.subheader("Day 4: Execute Purge")
 poll_message_id = st.text_input("Enter the Message ID from Day 1:")
 
 async def execute_purge(group_input, msg_id):
-    client = TelegramClient(MemorySession(), API_ID, API_HASH)
-    await client.start(bot_token=BOT_TOKEN)
-    
-    # CRITICAL FIX 1: Populate the blank MemorySession cache so the bot remembers the group
-    await client.get_dialogs()
-    
-    # CRITICAL FIX 2: Force the Group ID from text back into a raw integer
     try:
         peer = int(group_input)
     except ValueError:
         peer = group_input
         
+    client = TelegramClient(MemorySession(), API_ID, API_HASH)
+    await client.start(bot_token=BOT_TOKEN)
+    
+    # THE FIX: Directly fetch the specific group entity instead of scraping all dialogs
+    group_entity = await client.get_entity(peer)
+    
     voters = set()
     
-    # Fetch the poll votes
+    # Loop through both poll options (b'0' and b'1')
     for option_byte in [b'0', b'1']:
         try:
             vote_req = await client(GetPollVotesRequest(
-                peer=peer,
+                peer=group_entity,
                 id=int(msg_id),
                 option=option_byte,
                 offset='',
@@ -84,7 +83,7 @@ async def execute_purge(group_input, msg_id):
             print(f"Skipped option {option_byte}: {e}")
             
     # Fetch all members to calculate who did not vote
-    all_members = await client.get_participants(peer)
+    all_members = await client.get_participants(group_entity)
     all_human_ids = {user.id for user in all_members if not user.bot}
     
     to_kick = all_human_ids - voters
@@ -92,19 +91,18 @@ async def execute_purge(group_input, msg_id):
     
     for uid in to_kick:
         try:
-            await client.kick_participant(peer, uid)
+            await client.kick_participant(group_entity, uid)
             kicked_count += 1
         except Exception as e:
             print(f"Failed to kick {uid}: {e}") 
             
-    # Send confirmation message to the group
-    await client.send_message(peer, f"تم الانتهاء من الفرز. تم حذف {kicked_count} من الأعضاء غير المتفاعلين.")
+    # Send final confirmation message to the group in Arabic
+    await client.send_message(group_entity, f"تم الانتهاء من الفرز. تم حذف {kicked_count} من الأعضاء غير المتفاعلين.")
     await client.disconnect()
     
     return kicked_count, len(voters)
 
 if st.button("Calculate & Purge Non-Voters"):
-    # CRITICAL FIX 3: Prevent silent failures if text boxes are empty
     if not group_id or not poll_message_id:
         st.warning("Please ensure BOTH the Group ID and Message ID are filled out before clicking.")
     else:
@@ -115,5 +113,4 @@ if st.button("Calculate & Purge Non-Voters"):
                 kicked, voted = loop.run_until_complete(execute_purge(group_id, poll_message_id))
                 st.success(f"Success! {voted} users voted. {kicked} ghost users were removed.")
             except Exception as e:
-                # Displays the exact error on the screen instead of failing silently
                 st.error(f"An error occurred: {e}")
