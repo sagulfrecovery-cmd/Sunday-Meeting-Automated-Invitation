@@ -1,71 +1,98 @@
+import streamlit as st
+import asyncio
 import os
-from telethon import TelegramClient, events, Button
+import requests
+from telethon import TelegramClient
+from telethon.tl.functions.messages import GetPollVotesRequest
 
-# SECURED CREDENTIALS
-# The script will pull from your server's environment variables to keep your public GitHub safe.
-API_ID = int(os.environ.get("TELEGRAM_API_ID", 39111225)) # From image_a3b5aa.png
-API_HASH = os.environ.get("TELEGRAM_API_HASH", "8d6b777cfce01184cd4a0cb7b227030a") # From image_a3b5aa.png
+st.set_page_config(page_title="Telegram Purge Bot")
+st.title("Group Purge Control")
+
+# Securely fetch credentials from Streamlit Secrets or Environment Variables
+API_ID = int(os.environ.get("TELEGRAM_API_ID", 39111225))
+API_HASH = os.environ.get("TELEGRAM_API_HASH", "8d6b777cfce01184cd4a0cb7b227030a")
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
-# Initialize the bot client using the Account_Removal app credentials
-client = TelegramClient('bot_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+group_id = st.text_input("Target Group Username (e.g., @mygroup)")
 
-active_users = set()
-target_group_id = None
-
-@client.on(events.NewMessage(pattern='/vote'))
-async def start_attendance(event):
-    """Generates an attendance button. Admin sends /vote to trigger this."""
-    global target_group_id, active_users
-    
-    target_group_id = event.chat_id
-    active_users.clear() # Reset memory for a new vote
-    
-    await event.respond(
-        "Attendance Check: Click the button below if you are still active in this group.",
-        buttons=Button.inline("Yes, I am active", data=b'active_click')
-    )
-
-@client.on(events.CallbackQuery(data=b'active_click'))
-async def handle_click(event):
-    """Silently logs the User ID when they click the button."""
-    active_users.add(event.sender_id)
-    # Shows a tiny popup message to the user confirming their click
-    await event.answer("Your activity has been logged!", alert=True) 
-
-@client.on(events.NewMessage(pattern='/purge'))
-async def execute_purge(event):
-    """Scrapes the live member list, subtracts the clickers, and kicks the rest."""
-    if not target_group_id:
-        await event.respond("Please run /vote first.")
-        return
-
-    await event.respond("Scraping current member list...")
-    
-    # The bot automatically fetches all members itself
-    all_members = await client.get_participants(target_group_id)
-    
-    # Filter out other bots to ensure we only kick real humans
-    all_member_ids = {user.id for user in all_members if not user.bot}
-    
-    # Calculate who didn't click
-    to_kick = all_member_ids - active_users
-    
-    if not to_kick:
-        await event.respond("No inactive members found. Everyone responded.")
-        return
+# ==========================================
+# SECTION 1: Deploy Poll
+# ==========================================
+st.subheader("Day 1: Deploy Poll")
+if st.button("Send Attendance Poll"):
+    if group_id:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPoll"
+        payload = {
+            "chat_id": group_id,
+            "question": "يرجى الاجابة على الاستبيان، وسيتم حذف الاعضاء غير المستجيبين، والبقاء في مجموعة زمالة الخليج فقط لأعضاء الزمالة للعلم.",
+            "options": [
+                "1) أنا عضو في الزمالة وأرغب بحضور اجتماع الأحد للخدمة فيه",
+                "2) أنا عضو في الزمالة لكني في المجموعة بهدف الحصول على المساعدة والتواصل مع الأعضاء"
+            ],
+            "is_anonymous": False # Required to see the voters on Day 4
+        }
+        res = requests.post(url, json=payload).json()
         
-    removed_count = 0
-    for user_id in to_kick:
+        if res.get("ok"):
+            msg_id = res['result']['message_id']
+            st.success(f"Poll sent successfully! **Save this Message ID for Day 4: {msg_id}**")
+        else:
+            st.error(f"Failed to send poll: {res}")
+    else:
+        st.warning("Please enter a group username.")
+
+# ==========================================
+# SECTION 2: Execute Purge
+# ==========================================
+st.subheader("Day 4: Execute Purge")
+poll_message_id = st.text_input("Enter the Message ID from Day 1:")
+
+async def execute_purge(group, msg_id):
+    client = TelegramClient('bot_session', API_ID, API_HASH)
+    await client.start(bot_token=BOT_TOKEN)
+    
+    voters = set()
+    
+    # Telegram API indexes the two options sequentially as b'0' and b'1'
+    # This loop ensures voters from BOTH options are added to the safe list
+    for option_byte in [b'0', b'1']:
         try:
-            # Telethon's kick_participant removes the user from the group
-            await client.kick_participant(target_group_id, user_id)
-            removed_count += 1
-        except Exception as e:
-            print(f"Failed to kick {user_id}: {e}")
+            vote_req = await client(GetPollVotesRequest(
+                peer=group,
+                id=int(msg_id),
+                option=option_byte,
+                offset='',
+                limit=100  # Safely covers your 50 members
+            ))
+            for vote in vote_req.votes:
+                voters.add(vote.peer.user_id)
+        except Exception:
+            pass # Skips gracefully if an option received zero votes
+            
+    # Fetch all members to calculate who did not vote
+    all_members = await client.get_participants(group)
+    all_human_ids = {user.id for user in all_members if not user.bot}
+    
+    to_kick = all_human_ids - voters
+    kicked_count = 0
+    
+    for uid in to_kick:
+        try:
+            await client.kick_participant(group, uid)
+            kicked_count += 1
+        except Exception:
+            pass 
+            
+    # Sends a final confirmation message to the group in Arabic
+    await client.send_message(group, f"تم الانتهاء من الفرز. تم حذف {kicked_count} من الأعضاء غير المتفاعلين.")
+    await client.disconnect()
+    
+    return kicked_count, len(voters)
 
-    await event.respond(f"Purge complete. Removed {removed_count} inactive members.")
-
-if __name__ == '__main__':
-    print("Hybrid Bot is online and listening...")
-    client.run_until_disconnected()
+if st.button("Calculate & Purge Non-Voters"):
+    if group_id and poll_message_id:
+        with st.spinner("Scraping poll results and purging inactive users..."):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            kicked, voted = loop.run_until_complete(execute_purge(group_id, poll_message_id))
+            st.success(f"Success! {voted} users voted. {kicked} ghost users were removed.")
