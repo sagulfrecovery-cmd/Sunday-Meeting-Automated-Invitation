@@ -21,15 +21,21 @@ group_id = st.text_input("Target Group Username (e.g., @mygroup)")
 st.subheader("Day 1: Deploy Poll")
 if st.button("Send Attendance Poll"):
     if group_id:
+        # Forces numerical IDs into strict integers for the Telegram API
+        try:
+            chat_target = int(group_id)
+        except ValueError:
+            chat_target = group_id # Leaves public @usernames as text
+
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPoll"
         payload = {
-            "chat_id": group_id,
+            "chat_id": chat_target,
             "question": "يرجى الاجابة على الاستبيان، وسيتم حذف الاعضاء غير المستجيبين، والبقاء في مجموعة زمالة الخليج فقط لأعضاء الزمالة للعلم.",
             "options": [
                 "1) أنا عضو في الزمالة وأرغب بحضور اجتماع الأحد للخدمة فيه",
                 "2) أنا عضو في الزمالة لكني في المجموعة بهدف الحصول على المساعدة والتواصل مع الأعضاء"
             ],
-            "is_anonymous": False # Required to see the voters on Day 4
+            "is_anonymous": False 
         }
         res = requests.post(url, json=payload).json()
         
