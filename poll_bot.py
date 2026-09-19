@@ -3,6 +3,7 @@ import asyncio
 import os
 import requests
 from telethon import TelegramClient
+from telethon.sessions import MemorySession  # New import added
 from telethon.tl.functions.messages import GetPollVotesRequest
 
 st.set_page_config(page_title="Telegram Purge Bot")
@@ -21,11 +22,10 @@ group_id = st.text_input("Target Group Username (e.g., @mygroup)")
 st.subheader("Day 1: Deploy Poll")
 if st.button("Send Attendance Poll"):
     if group_id:
-        # Forces numerical IDs into strict integers for the Telegram API
         try:
             chat_target = int(group_id)
         except ValueError:
-            chat_target = group_id # Leaves public @usernames as text
+            chat_target = group_id 
 
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPoll"
         payload = {
@@ -54,13 +54,12 @@ st.subheader("Day 4: Execute Purge")
 poll_message_id = st.text_input("Enter the Message ID from Day 1:")
 
 async def execute_purge(group, msg_id):
-    client = TelegramClient('bot_session', API_ID, API_HASH)
+    # Patched: Bypasses Streamlit file system restrictions using MemorySession
+    client = TelegramClient(MemorySession(), API_ID, API_HASH)
     await client.start(bot_token=BOT_TOKEN)
     
     voters = set()
     
-    # Telegram API indexes the two options sequentially as b'0' and b'1'
-    # This loop ensures voters from BOTH options are added to the safe list
     for option_byte in [b'0', b'1']:
         try:
             vote_req = await client(GetPollVotesRequest(
@@ -68,14 +67,13 @@ async def execute_purge(group, msg_id):
                 id=int(msg_id),
                 option=option_byte,
                 offset='',
-                limit=100  # Safely covers your 50 members
+                limit=100
             ))
             for vote in vote_req.votes:
                 voters.add(vote.peer.user_id)
         except Exception:
-            pass # Skips gracefully if an option received zero votes
+            pass 
             
-    # Fetch all members to calculate who did not vote
     all_members = await client.get_participants(group)
     all_human_ids = {user.id for user in all_members if not user.bot}
     
@@ -89,7 +87,6 @@ async def execute_purge(group, msg_id):
         except Exception:
             pass 
             
-    # Sends a final confirmation message to the group in Arabic
     await client.send_message(group, f"تم الانتهاء من الفرز. تم حذف {kicked_count} من الأعضاء غير المتفاعلين.")
     await client.disconnect()
     
