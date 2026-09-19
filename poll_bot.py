@@ -3,16 +3,17 @@ import asyncio
 import os
 import requests
 from telethon import TelegramClient
-from telethon.sessions import MemorySession
+from telethon.sessions import StringSession
 from telethon.tl.functions.messages import GetPollVotesRequest
 
 st.set_page_config(page_title="Telegram Purge Bot")
 st.title("Group Purge Control")
 
-# Securely fetch credentials from Streamlit Secrets
+# SECURE CREDENTIALS
 API_ID = int(os.environ.get("TELEGRAM_API_ID", 39111225))
 API_HASH = os.environ.get("TELEGRAM_API_HASH", "8d6b777cfce01184cd4a0cb7b227030a")
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+SESSION_STRING = os.environ.get("TELEGRAM_SESSION_STRING")
 
 group_id = st.text_input("Target Group ID (e.g., -1002844744618)")
 
@@ -59,30 +60,45 @@ async def execute_purge(group_input, msg_id):
     except ValueError:
         peer = group_input
         
-    client = TelegramClient(MemorySession(), API_ID, API_HASH)
-    await client.start(bot_token=BOT_TOKEN)
+    # AUTH UPDATE: Logs in via StringSession to bypass bot API restrictions
+    client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
+    await client.start()
     
-    # THE FIX: Directly fetch the specific group entity instead of scraping all dialogs
     group_entity = await client.get_entity(peer)
     
+    # SAFETY UPDATE: Verifies the message is actually a poll
+    message = await client.get_messages(group_entity, ids=int(msg_id))
+    if getattr(message.media, 'poll', None) is None:
+        st.error("Error: The provided Message ID is not a poll.")
+        await client.disconnect()
+        return 0, 0
+        
+    poll = message.media.poll
     voters = set()
     
-    # Loop through both poll options (b'0' and b'1')
-    for option_byte in [b'0', b'1']:
+    # DYNAMIC FETCH: Pulls the exact byte options directly from the poll
+    for answer in poll.answers:
         try:
             vote_req = await client(GetPollVotesRequest(
                 peer=group_entity,
                 id=int(msg_id),
-                option=option_byte,
+                option=answer.option,
                 offset='',
                 limit=100
             ))
-            for vote in vote_req.votes:
-                voters.add(vote.peer.user_id)
+            for user in vote_req.users:
+                voters.add(user.id)
         except Exception as e:
-            print(f"Skipped option {option_byte}: {e}")
+            st.error(f"Failed to read votes: {e}")
+            await client.disconnect()
+            return 0, 0
             
-    # Fetch all members to calculate who did not vote
+    # CRITICAL SAFEGUARD: Aborts completely if no voters are found
+    if len(voters) == 0:
+        st.warning("Safeguard Triggered: 0 voters detected. The purge has been aborted to prevent an accidental mass kick.")
+        await client.disconnect()
+        return 0, 0
+        
     all_members = await client.get_participants(group_entity)
     all_human_ids = {user.id for user in all_members if not user.bot}
     
@@ -96,7 +112,6 @@ async def execute_purge(group_input, msg_id):
         except Exception as e:
             print(f"Failed to kick {uid}: {e}") 
             
-    # Send final confirmation message to the group in Arabic
     await client.send_message(group_entity, f"تم الانتهاء من الفرز. تم حذف {kicked_count} من الأعضاء غير المتفاعلين.")
     await client.disconnect()
     
@@ -104,13 +119,16 @@ async def execute_purge(group_input, msg_id):
 
 if st.button("Calculate & Purge Non-Voters"):
     if not group_id or not poll_message_id:
-        st.warning("Please ensure BOTH the Group ID and Message ID are filled out before clicking.")
+        st.warning("Please ensure BOTH the Group ID and Message ID are filled out.")
+    elif not SESSION_STRING:
+        st.error("Missing TELEGRAM_SESSION_STRING in Streamlit Secrets.")
     else:
         with st.spinner("Scraping poll results and purging inactive users..."):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 kicked, voted = loop.run_until_complete(execute_purge(group_id, poll_message_id))
-                st.success(f"Success! {voted} users voted. {kicked} ghost users were removed.")
+                if voted > 0:
+                    st.success(f"Success! {voted} users voted and were saved. {kicked} ghost users were removed.")
             except Exception as e:
                 st.error(f"An error occurred: {e}")
