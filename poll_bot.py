@@ -53,17 +53,26 @@ if st.button("Send Attendance Poll"):
 st.subheader("Day 4: Execute Purge")
 poll_message_id = st.text_input("Enter the Message ID from Day 1:")
 
-async def execute_purge(group, msg_id):
-    # Patched: Bypasses Streamlit file system restrictions using MemorySession
+async def execute_purge(group_input, msg_id):
     client = TelegramClient(MemorySession(), API_ID, API_HASH)
     await client.start(bot_token=BOT_TOKEN)
     
+    # CRITICAL FIX 1: Populate the blank MemorySession cache so the bot remembers the group
+    await client.get_dialogs()
+    
+    # CRITICAL FIX 2: Force the Group ID from text back into a raw integer
+    try:
+        peer = int(group_input)
+    except ValueError:
+        peer = group_input
+        
     voters = set()
     
+    # Fetch the poll votes
     for option_byte in [b'0', b'1']:
         try:
             vote_req = await client(GetPollVotesRequest(
-                peer=group,
+                peer=peer,
                 id=int(msg_id),
                 option=option_byte,
                 offset='',
@@ -71,10 +80,11 @@ async def execute_purge(group, msg_id):
             ))
             for vote in vote_req.votes:
                 voters.add(vote.peer.user_id)
-        except Exception:
-            pass 
+        except Exception as e:
+            print(f"Skipped option {option_byte}: {e}")
             
-    all_members = await client.get_participants(group)
+    # Fetch all members to calculate who did not vote
+    all_members = await client.get_participants(peer)
     all_human_ids = {user.id for user in all_members if not user.bot}
     
     to_kick = all_human_ids - voters
@@ -82,20 +92,28 @@ async def execute_purge(group, msg_id):
     
     for uid in to_kick:
         try:
-            await client.kick_participant(group, uid)
+            await client.kick_participant(peer, uid)
             kicked_count += 1
-        except Exception:
-            pass 
+        except Exception as e:
+            print(f"Failed to kick {uid}: {e}") 
             
-    await client.send_message(group, f"تم الانتهاء من الفرز. تم حذف {kicked_count} من الأعضاء غير المتفاعلين.")
+    # Send confirmation message to the group
+    await client.send_message(peer, f"تم الانتهاء من الفرز. تم حذف {kicked_count} من الأعضاء غير المتفاعلين.")
     await client.disconnect()
     
     return kicked_count, len(voters)
 
 if st.button("Calculate & Purge Non-Voters"):
-    if group_id and poll_message_id:
+    # CRITICAL FIX 3: Prevent silent failures if text boxes are empty
+    if not group_id or not poll_message_id:
+        st.warning("Please ensure BOTH the Group ID and Message ID are filled out before clicking.")
+    else:
         with st.spinner("Scraping poll results and purging inactive users..."):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            kicked, voted = loop.run_until_complete(execute_purge(group_id, poll_message_id))
-            st.success(f"Success! {voted} users voted. {kicked} ghost users were removed.")
+            try:
+                kicked, voted = loop.run_until_complete(execute_purge(group_id, poll_message_id))
+                st.success(f"Success! {voted} users voted. {kicked} ghost users were removed.")
+            except Exception as e:
+                # Displays the exact error on the screen instead of failing silently
+                st.error(f"An error occurred: {e}")
