@@ -19,7 +19,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # أوقات يوم الأحد
 SUN_OPEN_HOUR, SUN_OPEN_MIN = 18, 0    # 6:00 PM
-SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 22, 20 # 9:20 PM
+SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20 # 9:20 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 18, 0    # 6:00 PM
