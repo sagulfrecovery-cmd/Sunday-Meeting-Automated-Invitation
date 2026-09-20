@@ -125,35 +125,29 @@ try:
     client = get_google_client()
     master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
     meetings_data = pd.DataFrame(master_sheet.get_all_records())
-    available_meetings = meetings_data['Meeting Day'].tolist()
+    available_meetings = [str(x).strip() for x in meetings_data['Meeting Day'].tolist()]
 except Exception as e:
     st.error(f"System Error: {e}")
     st.stop()
 
-# Build the Input Form - باستخدام أزرار كبيرة ومستقلة
-st.markdown("### 📅 اختر يوم الاجتماع (Select Meeting Day):")
-
-if available_meetings:
-    # تهيئة المتغير إذا لم يكن موجوداً
-    if "selected_meeting" not in st.session_state:
-        st.session_state.selected_meeting = available_meetings[0]
-
-    # إنشاء أعمدة ديناميكية بناءً على عدد الاجتماعات
-    cols = st.columns(len(available_meetings))
-    for i, meeting_day in enumerate(available_meetings):
-        with cols[i]:
-            # تمييز الزر المختار بلون مختلف (primary)
-            btn_type = "primary" if st.session_state.selected_meeting == meeting_day else "secondary"
-            if st.button(f"اجتماع {meeting_day}", use_container_width=True, type=btn_type):
-                st.session_state.selected_meeting = meeting_day
-                st.rerun() # تحديث الواجهة فوراً لتغيير الألوان
-
-    # إظهار اليوم المختار حالياً للتأكيد
-    st.info(f"📌 اليوم المحدد للتسجيل حالياً: **{st.session_state.selected_meeting}**")
-    selected_meeting = st.session_state.selected_meeting
+# ==========================================
+# التحديد التلقائي لليوم بدون تدخل المستخدم
+# ==========================================
+if weekday == 6:
+    selected_meeting = "الأحد"
+elif weekday == 2:
+    selected_meeting = "الأربعاء"
 else:
-    st.warning("لا توجد اجتماعات متاحة حالياً.")
+    # احتياطياً في حال حدوث خطأ غير متوقع
+    st.error("لا يوجد اجتماع مبرمج لهذا اليوم.")
     st.stop()
+
+# التأكد أن اسم اليوم موجود في شيت جوجل الأساسي
+if selected_meeting not in available_meetings:
+    st.error(f"⚠️ عذراً، لم يتم العثور على إعدادات اجتماع يوم **{selected_meeting}** في قاعدة البيانات.")
+    st.stop()
+
+st.info(f"📌 اجتماع اليوم: **{selected_meeting}**")
 
 st.markdown("<br>", unsafe_allow_html=True)
 user_email = st.text_input("البريد الإلكتروني المسجل (Registered Email):").strip().lower()
@@ -195,7 +189,6 @@ if pledge:
                         st.success("✅ تم تسجيل حضورك بنجاح! شكراً لأمانتك، تم إرسال الرابط إلى بريدك الإلكتروني.")
                         st.info(f"🔗 **رابط زووم المباشر:**\n\n{zoom_link}")
                     else:
-                        # التعديل هنا: رسالة ديناميكية تتضمن اسم الاجتماع
                         st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التأكد من البريد أو تقديم طلب انضمام.")
                 except Exception as e:
                     st.error(f"حدث خطأ أثناء جلب البيانات: {e}")
