@@ -74,27 +74,32 @@ now = datetime.now(baghdad_tz)
 weekday = now.weekday()  # 6 = الأحد، 2 = الأربعاء
 now_time = now.time()
 
-# توليد النصوص آلياً بناءً على الإعدادات أعلاه
-sun_open_str = format_time_arabic(SUN_OPEN_HOUR, SUN_OPEN_MIN)
-sun_close_str = format_time_arabic(SUN_CLOSE_HOUR, SUN_CLOSE_MIN)
-wed_open_str = format_time_arabic(WED_OPEN_HOUR, WED_OPEN_MIN)
-wed_close_str = format_time_arabic(WED_CLOSE_HOUR, WED_CLOSE_MIN)
+# التحقق من مفتاح وضع الاختبار من الـ Secrets (الافتراضي False إذا لم يتم إضافته)
+is_testing = st.secrets.get("test_mode", False)
 
 is_open = False
 
-sun_open_time = dt_time(SUN_OPEN_HOUR, SUN_OPEN_MIN)
-sun_close_time = dt_time(SUN_CLOSE_HOUR, SUN_CLOSE_MIN)
-wed_open_time = dt_time(WED_OPEN_HOUR, WED_OPEN_MIN)
-wed_close_time = dt_time(WED_CLOSE_HOUR, WED_CLOSE_MIN)
+if is_testing:
+    is_open = True
+else:
+    sun_open_time = dt_time(SUN_OPEN_HOUR, SUN_OPEN_MIN)
+    sun_close_time = dt_time(SUN_CLOSE_HOUR, SUN_CLOSE_MIN)
+    wed_open_time = dt_time(WED_OPEN_HOUR, WED_OPEN_MIN)
+    wed_close_time = dt_time(WED_CLOSE_HOUR, WED_CLOSE_MIN)
 
-if weekday == 6: 
-    if sun_open_time <= now_time <= sun_close_time:
-        is_open = True
-elif weekday == 2: 
-    if wed_open_time <= now_time <= wed_close_time:
-        is_open = True
+    if weekday == 6: 
+        if sun_open_time <= now_time <= sun_close_time:
+            is_open = True
+    elif weekday == 2: 
+        if wed_open_time <= now_time <= wed_close_time:
+            is_open = True
 
 if not is_open:
+    sun_open_str = format_time_arabic(SUN_OPEN_HOUR, SUN_OPEN_MIN)
+    sun_close_str = format_time_arabic(SUN_CLOSE_HOUR, SUN_CLOSE_MIN)
+    wed_open_str = format_time_arabic(WED_OPEN_HOUR, WED_OPEN_MIN)
+    wed_close_str = format_time_arabic(WED_CLOSE_HOUR, WED_CLOSE_MIN)
+
     st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
     st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
     st.info(
@@ -106,9 +111,11 @@ if not is_open:
     st.stop()  
 
 # ==========================================
-# ✅ واجهة التطبيق الرئيسية (تظهر فقط وقت السماح)
+# ✅ واجهة التطبيق الرئيسية (تظهر فقط وقت السماح أو أثناء الاختبار)
 # ==========================================
 st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
+if is_testing:
+    st.warning("🛠️ **تنبيه:** البوابة تعمل حالياً في وضع الاختبار (Test Mode).")
 st.markdown("---")
 
 # رسالة التنبيه باللون الأحمر العريض
@@ -131,16 +138,14 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# التحديد التلقائي لليوم بدون تدخل المستخدم
+# التحديد التلقائي لليوم (أثناء الاختبار، إذا لم يكن الأحد أو الأربعاء، سنفترض اجتماع الأحد للتجربة)
 # ==========================================
-if weekday == 6:
+if weekday == 6 or (is_testing and weekday not in [6, 2]):
     selected_meeting = "الأحد"
 elif weekday == 2:
     selected_meeting = "الأربعاء"
 else:
-    # احتياطياً في حال حدوث خطأ غير متوقع
-    st.error("لا يوجد اجتماع مبرمج لهذا اليوم.")
-    st.stop()
+    selected_meeting = "الأحد"
 
 # التأكد أن اسم اليوم موجود في شيت جوجل الأساسي
 if selected_meeting not in available_meetings:
