@@ -141,11 +141,11 @@ except Exception as e:
 # التحديد التلقائي لليوم (أثناء الاختبار، إذا لم يكن الأحد أو الأربعاء، سنفترض اجتماع الأحد للتجربة)
 # ==========================================
 if weekday == 6 or (is_testing and weekday not in [6, 2]):
-    selected_meeting = "الأحد"
+    selected_meeting = "الأربعاء"
 elif weekday == 2:
     selected_meeting = "الأربعاء"
 else:
-    selected_meeting = "الأربعاء"
+    selected_meeting = "الأحد"
 
 # التأكد أن اسم اليوم موجود في شيت جوجل الأساسي
 if selected_meeting not in available_meetings:
