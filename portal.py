@@ -71,11 +71,9 @@ st.set_page_config(page_title="بوابة زمالة الخليج", page_icon="�
 # ==========================================
 baghdad_tz = pytz.timezone("Asia/Baghdad")
 now = datetime.now(baghdad_tz)
-#weekday = now.weekday()  # 6 = الأحد، 2 = الأربعاء
-#now_time = now.time()
-weekday = 2
-current_hour = 19
-current_minute = 0
+weekday = now.weekday()  # 6 = الأحد، 2 = الأربعاء
+now_time = now.time()
+
 # توليد النصوص آلياً بناءً على الإعدادات أعلاه
 sun_open_str = format_time_arabic(SUN_OPEN_HOUR, SUN_OPEN_MIN)
 sun_close_str = format_time_arabic(SUN_CLOSE_HOUR, SUN_CLOSE_MIN)
