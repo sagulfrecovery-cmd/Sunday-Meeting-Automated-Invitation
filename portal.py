@@ -145,7 +145,7 @@ if weekday == 6 or (is_testing and weekday not in [6, 2]):
 elif weekday == 2:
     selected_meeting = "الأربعاء"
 else:
-    selected_meeting = "الأحد"
+    selected_meeting = "الأربعاء"
 
 # التأكد أن اسم اليوم موجود في شيت جوجل الأساسي
 if selected_meeting not in available_meetings:
