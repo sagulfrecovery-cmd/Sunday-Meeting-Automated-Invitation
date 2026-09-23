@@ -101,7 +101,7 @@ if not is_open:
     wed_close_str = format_time_arabic(WED_CLOSE_HOUR, WED_CLOSE_MIN)
 
     st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
-    st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
+    st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً. التسجيل يفتح قبل 15 دقيقة من بدء الاجتماع")
     st.info(
         f"يُفتح التسجيل فقط في أيام الاجتماعات:\n\n"
         f"- **الأحد:** من الساعة {sun_open_str} حتى {sun_close_str}\n"
