@@ -305,7 +305,7 @@ def run_robot():
                 # التعديل هنا: إجبار الكود على وضع جميع الأعضاء في خانة TO لاجتماع الأحد
                 create_draft("اعلان اجتماع الخليج", body_html_sun, valid_emails, "TO", is_html=True)
                 
-            # --- قسم اجتماع الأربعاء ---
+# --- قسم اجتماع الأربعاء ---
             elif "Meetings" in worksheet_names:
                 print("🎨 استخدام قالب HTML (Meetings)...")
                 meeting_topic = "موضوع غير محدد"
@@ -317,10 +317,32 @@ def run_robot():
                             break
                 except: pass
 
+                # 1. Pull the UTC time from the Master Sheet (Fallback to 17:30 if empty)
+                utc_time_str = str(meeting_info.get('Meeting Time UTC', '17:30')).strip()
+                
+                # 2. Localize it as a UTC datetime object
+                utc_dt = pytz.utc.localize(datetime.strptime(today_str + f" {utc_time_str}:00", "%Y-%m-%d %H:%M:%S"))
+                
+                # 3. Generate the Time Zone list
+                tzs = [("Asia/Dubai", "Dubai", "دبي"), 
+                       ("Asia/Baghdad", "Baghdad", "بغداد"), 
+                       ("Africa/Cairo", "Cairo", "القاهرة"), 
+                       ("Europe/London", "London", "لندن"), 
+                       ("America/New_York", "New_York", "نيويورك")]
+                
+                dyn_time_html = "".join([f"{utc_dt.astimezone(pytz.timezone(tz[0])).strftime('%I:%M %p').upper().lstrip('0')} -- {tz[1]}/{tz[2]}<br>" for tz in tzs])
+
+                # 4. Inject into the HTML body
                 body_html = f"""<div dir="rtl" style="text-align: right; font-family: Arial; font-size: 16px; line-height: 1.6;">
                   ༺ يرجى قراءة الإعلان جيدًا ༻<br><br>
                   تدعوكم ༺ زمالة الخليج ༻ إلى اجتماع اليوم: <b>{meeting_topic}</b><br>
                   {today_name} الموافق {today_str.replace('-', '/')}<br><br>
+                  
+                  <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
+                  📟 <b>بداية وقت الاجتماع</b><br>
+                  <div style="direction: ltr; text-align: right;">{dyn_time_html}</div>
+                  <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
+                  
                   <b>لحضور الاجتماع، عليك أن تقوم بالخطوتين التاليتين:</b><br><br>
                   🔗 <b>أولًا: التسجيل لأول مرة فقط:</b><br>
                   <a href="{form_link}">{form_link}</a><br><br>
@@ -330,7 +352,6 @@ def run_robot():
                 
                 batch_size = 45
                 for i in range(0, len(valid_emails), batch_size):
-                    # التعديل هنا: وضع sagulf.recovery@gmail.com في خانة TO وباقي الأعضاء حسب المتغير invite_method
                     create_draft(f"دعوة زمالة الخليج - {today_str}", body_html, valid_emails[i:i+batch_size], invite_method, is_html=True, static_to="sagulf.recovery@gmail.com")
 
         admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
