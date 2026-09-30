@@ -52,14 +52,31 @@ def is_valid_email(email):
 
 @st.cache_resource
 def get_google_client():
-    # التحقق الآمن من نوع بيانات الاعتماد (سواء كانت String أو AttrDict/dict)
-    raw_creds = st.secrets["gcp_service_account"]
+    try:
+        raw_creds = st.secrets["gcp_service_account"]
+    except KeyError:
+        st.error("❌ خطأ حرج: قسم [gcp_service_account] غير موجود بالكامل في إعدادات secrets.toml أو Streamlit Secrets.")
+        st.stop()
+    
+    # تحويل البيانات إلى قاموس قياسي بغض النظر عن شكلها
     if isinstance(raw_creds, str):
-        creds_dict = json.loads(raw_creds)
+        try:
+            creds_dict = json.loads(raw_creds)
+        except json.JSONDecodeError as err:
+            st.error(f"❌ خطأ في تنسيق JSON الخاص بـ gcp_service_account: {err}")
+            st.stop()
     else:
         creds_dict = dict(raw_creds)
         
-    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    # البحث الآمن عن المفتاح الخاص لمنع ظهور خطأ KeyError
+    private_key_val = creds_dict.get("private_key") or creds_dict.get("PRIVATE_KEY")
+    
+    if not private_key_val:
+        st.error("❌ خطأ حرج: المفتاح الخاص 'private_key' مفقود داخل إعدادات حساب خدمة جوجل في الـ Secrets.")
+        st.stop()
+        
+    creds_dict["private_key"] = private_key_val.replace("\\n", "\n")
+    
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
     # آلية إعادة المحاولة عند حدوث خطأ 429 (Quota Exceeded)
@@ -212,7 +229,7 @@ if pledge:
         
         # التحقق من إدخال البريد
         if not user_email:
-            st.warning("⚠️ يرجى إدخال البريد الإلكتروني.")
+            st.warning("⚠️️ يرجى إدخال البريد الإلكتروني.")
         
         # التحقق من صحة صيغة البريد
         elif not is_valid_email(user_email):
