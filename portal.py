@@ -26,13 +26,10 @@ SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 11:50 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 10:50 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
 ROOM_LOCK_MINUTES = 20
-
-# مهلة الاتصال بسكربت جوجل (بالثواني)
-GAS_TIMEOUT = 15
 
 # ==========================================
 # 🔧 Helper Functions & Caching
@@ -46,19 +43,8 @@ def format_time_arabic(hour, minute):
 
 @st.cache_resource
 def get_google_client():
-    # ✅ الإصلاح: التعامل مع الصيغتين (نص JSON أو قسم TOML/AttrDict)
-    gcp_secrets = st.secrets["gcp_service_account"]
-    
-    if isinstance(gcp_secrets, str):
-        # إذا كانت نص JSON
-        creds_dict = json.loads(gcp_secrets)
-    else:
-        # إذا كانت قسم TOML (AttrDict) - نُحوّلها إلى قاموس عادي
-        creds_dict = dict(gcp_secrets)
-    
-    # معالجة مفتاح private_key
+    creds_dict = json.loads(st.secrets["gcp_service_account"])
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-    
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
     # آلية إعادة المحاولة عند حدوث خطأ 429 (Quota Exceeded)
@@ -144,23 +130,6 @@ if is_testing:
     st.warning("🛠️ **تنبيه:** البوابة تعمل حالياً في وضع الاختبار (Test Mode).")
 st.markdown("---")
 
-# ==========================================
-# ✅ فحص النتيجة في أعلى الصفحة قبل عرض حقل الإدخال
-# ==========================================
-if st.session_state.get('check_in_success', False):
-    st.success("✅ تم تسجيل حضورك بنجاح! شكراً لأمانتك.")
-    
-    zoom_link = st.session_state['zoom_link']
-    checked_in_email = st.session_state['checked_in_email']
-    meeting_day = st.session_state['selected_meeting']
-    
-    st.markdown("### 🔗 رابط زووم المباشر")
-    st.markdown("**اضغط على أيقونة النسخ في الزاوية العلوية للصندوق لنسخ الرابط:**")
-    st.code(zoom_link, language=None)
-    
-    st.caption(f"تم التسجيل بالبريد: {checked_in_email} | الاجتماع: {meeting_day}")
-    st.stop()
-
 st.markdown(f"""
 <div style="background-color: #ffe6e6; padding: 15px; border-radius: 8px; border: 2px solid red; text-align: center; margin-bottom: 25px;">
     <h3 style="color: #c62828; margin: 0; font-weight: bold; line-height: 1.4;">
@@ -217,25 +186,19 @@ if pledge:
                     if user_email in registered_emails:
                         # تجهيز البيانات للإرسال
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
-                        script_url = st.secrets["gas_script_url"]
+                        script_url = "https://script.google.com/macros/s/AKfycby4pH_ELy-H57Zan-xF34GCdbXVXRI8xEIRctbsM5EsZ5EFPPgbgY6Oxk1ZKZwV6JhbbQ/exec"
+
                         payload = {
-                            "target_id": target_id,
-                            "timestamp": baghdad_time,
-                            "email": user_email
+                          "target_id": target_id,
+                          "timestamp": baghdad_time,
+                          "email": user_email
                         }
 
-                        # إضافة timeout لمنع تجمد التطبيق
-                        try:
-                            response = requests.post(script_url, data=payload, timeout=GAS_TIMEOUT)
-                        except requests.exceptions.Timeout:
-                            st.error("❌ انتهت مهلة الاتصال بالخادم. يرجى المحاولة مرة أخرى.")
-                            st.stop()
-                        except requests.exceptions.RequestException as req_err:
-                            st.error(f"❌ خطأ في الاتصال بالخادم: {req_err}")
-                            st.stop()
+                        # إرسال البيانات لسكربت جوجل بدلاً من الكتابة المباشرة (حل التزامن)
+                        response = requests.post(script_url, data=payload)
 
-                        # فحص مرن للاستجابة
-                        if "Success" in response.text:
+                        if response.text == "Success":
+                            # حفظ البيانات في session_state لعرضها بعد إعادة التحميل
                             st.session_state['check_in_success'] = True
                             st.session_state['zoom_link'] = zoom_link
                             st.session_state['checked_in_email'] = user_email
@@ -243,11 +206,28 @@ if pledge:
                             
                             st.rerun()
                         else:
-                            st.error(f"حدث خطأ أثناء حفظ البيانات: {response.text[:200]}")
-                            
+                            st.error(f"حدث خطأ أثناء حفظ البيانات: {response.text}")
                     else:
                         st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التأكد من البريد أو تقديم طلب انضمام.")
+                
                 except Exception as e:
                     st.error(f"حدث خطأ أثناء تسجيل الحضور: {e}")
 else:
     st.info("💡 يرجى وضع علامة (صح) على التعهد أعلاه لتفعيل زر الدخول.")
+
+# ==========================================
+# ✅ عرض النتيجة بعد التسجيل الناجح
+# ==========================================
+if st.session_state.get('check_in_success', False):
+    st.markdown("---")
+    st.success("✅ تم تسجيل حضورك بنجاح! شكراً لأمانتك.")
+    
+    zoom_link = st.session_state['zoom_link']
+    checked_in_email = st.session_state['checked_in_email']
+    meeting_day = st.session_state['selected_meeting']
+    
+    st.markdown("### 🔗 رابط زووم المباشر")
+    st.markdown("**اضغط على أيقونة النسخ في الزاوية العلوية للصندوق لنسخ الرابط:**")
+    st.code(zoom_link, language=None)
+    
+    st.caption(f"تم التسجيل بالبريد: {checked_in_email} | الاجتماع: {meeting_day}")
