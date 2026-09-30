@@ -8,6 +8,11 @@ from email.mime.text import MIMEText
 from datetime import datetime, time as dt_time
 import pytz
 
+# --- مكتبات إضافية لآلية إعادة المحاولة ---
+from google.auth.transport.requests import AuthorizedSession
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 # --- CONFIGURATION ---
 MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -44,23 +49,52 @@ def get_google_client():
     creds_dict = json.loads(st.secrets["gcp_service_account"])
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    return gspread.authorize(creds)
+    
+    # ✅ التعديل 1: إعداد آلية إعادة المحاولة عند حدوث خطأ 429 (Quota Exceeded)
+    session = AuthorizedSession(creds)
+    retry = Retry(
+        total=5,  # عدد محاولات إعادة المحاولة
+        backoff_factor=1,  # الانتظار بين المحاولات (1، 2، 4، 8 ثواني)
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET", "POST"]
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('https://', adapter)
+    session.mount('http://', adapter)
+    
+    return gspread.Client(auth=creds, session=session)
 
-# تخزين الإعدادات الأساسية للاجتماعات لمدة 10 دقائق (600 ثانية)
-@st.cache_data(ttl=600)
+# ✅ التعديل 2: زيادة مدة الكاش لتقليل طلبات القراءة
+@st.cache_data(ttl=3600) # تم رفعها من 600 إلى 3600 ثانية (ساعة كاملة)
 def get_meetings_data():
     client = get_google_client()
     master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
     return pd.DataFrame(master_sheet.get_all_records())
 
-# تخزين قائمة البريد الإلكتروني المسموح لها بالدخول لمدة 5 دقائق (300 ثانية)
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=900) # تم رفعها من 300 إلى 900 ثانية (15 دقيقة)
 def get_registered_emails(target_sheet_id):
     client = get_google_client()
     target_db = client.open_by_key(target_sheet_id)
     reg_tab = target_db.worksheet("Registration")
     reg_df = pd.DataFrame(reg_tab.get_all_records())
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
+
+# ✅ التعديل 3: تخزين ملف الشيت في الكاش لتفادي فتحه مع كل عملية تسجيل
+@st.cache_resource
+def get_spreadsheet(spreadsheet_id):
+    client = get_google_client()
+    return client.open_by_key(spreadsheet_id)
+
+# ✅ التعديل 4: تخزين ورقة Check-In Log في الكاش (وإنشائها إذا لم تكن موجودة)
+@st.cache_resource
+def get_check_in_tab(spreadsheet_id):
+    spreadsheet = get_spreadsheet(spreadsheet_id)
+    try:
+        return spreadsheet.worksheet("Check-In Log")
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title="Check-In Log", rows="1000", cols="2")
+        ws.append_row(["Timestamp", "Email"])
+        return ws
 
 def send_zoom_email(recipient_email, meeting_day, zoom_link):
     sender = st.secrets["sender_email"]
@@ -195,15 +229,8 @@ if pledge:
                     registered_emails = get_registered_emails(target_id)
 
                     if user_email in registered_emails:
-                        # عملية الكتابة فقط هي التي تتصل بجوجل مباشرة
-                        client = get_google_client()
-                        target_db = client.open_by_key(target_id)
-                        
-                        try:
-                            check_in_tab = target_db.worksheet("Check-In Log")
-                        except gspread.exceptions.WorksheetNotFound:
-                            check_in_tab = target_db.add_worksheet(title="Check-In Log", rows="1000", cols="2")
-                            check_in_tab.append_row(["Timestamp", "Email"])
+                        # ✅ التعديل 5: استخدام الورقة المخزنة في الكاش بدلاً من فتحها من جديد
+                        check_in_tab = get_check_in_tab(target_id)
                         
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
                         check_in_tab.append_row([baghdad_time, user_email])
