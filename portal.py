@@ -3,8 +3,6 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 import json
-import smtplib
-from email.mime.text import MIMEText
 from datetime import datetime, time as dt_time
 import pytz
 
@@ -27,7 +25,7 @@ SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 22, 50  # 8:50 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 20, 50  # 8:50 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
 ROOM_LOCK_MINUTES = 20
@@ -48,7 +46,7 @@ def get_google_client():
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
-    # آلية إعادة المحاولة عند حدوث خطأ 429
+    # آلية إعادة المحاولة عند حدوث خطأ 429 (Quota Exceeded)
     session = AuthorizedSession(creds)
     retry = Retry(
         total=5,
@@ -91,21 +89,6 @@ def get_check_in_tab(spreadsheet_id):
         ws.append_row(["Timestamp", "Email"])
         return ws
 
-def send_zoom_email(recipient_email, meeting_day, zoom_link):
-    sender = st.secrets["sender_email"]
-    password = st.secrets["app_password"]
-    
-    body = f"مرحباً،\n\nشكراً لتسجيل حضورك في اجتماع يوم {meeting_day}.\nرابط الدخول المباشر إلى غرفة زووم:\n{zoom_link}\n\nنحن بالفعل نتعافى!"
-    msg = MIMEText(body, 'plain', 'utf-8')
-    msg['Subject'] = f"رابط الدخول لاجتماع زمالة الخليج - {meeting_day}"
-    msg['From'] = sender
-    msg['To'] = recipient_email
-
-    server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-    server.login(sender, password)
-    server.send_message(msg)
-    server.quit()
-
 # ==========================================
 # 🖥️ UI SETUP
 # ==========================================
@@ -116,7 +99,7 @@ st.set_page_config(page_title="بوابة زمالة الخليج", page_icon="�
 # ==========================================
 baghdad_tz = pytz.timezone("Asia/Baghdad")
 now = datetime.now(baghdad_tz)
-weekday = now.weekday()
+weekday = now.weekday()  # 6 = الأحد، 2 = الأربعاء
 now_time = now.time()
 
 is_testing = st.secrets.get("test_mode", False)
@@ -177,6 +160,7 @@ except Exception as e:
     st.error(f"System Error: {e}")
     st.stop()
 
+# التحديد التلقائي لليوم
 if weekday == 6 or (is_testing and weekday not in [6, 2]):
     selected_meeting = "الأحد"
 elif weekday == 2:
@@ -214,18 +198,18 @@ if pledge:
                     registered_emails = get_registered_emails(target_id)
 
                     if user_email in registered_emails:
-                        # ✅ تسجيل الحضور مباشرة (سريع، بدون انتظار الإيميل)
+                        # تسجيل الحضور مباشرة
                         check_in_tab = get_check_in_tab(target_id)
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
                         check_in_tab.append_row([baghdad_time, user_email])
                         
-                        # حفظ الرابط وبيانات أخرى في session_state لعرضها لاحقاً
+                        # حفظ البيانات في session_state لعرضها بعد إعادة التحميل
                         st.session_state['check_in_success'] = True
                         st.session_state['zoom_link'] = zoom_link
                         st.session_state['checked_in_email'] = user_email
                         st.session_state['selected_meeting'] = selected_meeting
                         
-                        st.rerun()  # إعادة تحميل الصفحة لعرض النتيجة
+                        st.rerun()
                     else:
                         st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التأكد من البريد أو تقديم طلب انضمام.")
                 except Exception as e:
@@ -248,15 +232,4 @@ if st.session_state.get('check_in_success', False):
     st.markdown("**اضغط على أيقونة النسخ في الزاوية العلوية للصندوق لنسخ الرابط:**")
     st.code(zoom_link, language=None)
     
-    st.markdown("---")
-    st.markdown("### 📧 هل تريد إرسال الرابط إلى بريدك الإلكتروني؟")
-    st.caption("هذا الخيار اختياري، وقد يستغرق بضع ثوانٍ.")
-    
-    if st.button("📨 أرسل الرابط إلى بريدي", use_container_width=True):
-        with st.spinner("جاري إرسال الإيميل..."):
-            try:
-                send_zoom_email(checked_in_email, meeting_day, zoom_link)
-                st.success(f"✅ تم إرسال الرابط بنجاح إلى: {checked_in_email}")
-            except Exception as e:
-                st.error(f"❌ تعذر إرسال الإيميل: {e}")
-                st.info("💡 لا مشكلة! يمكنك نسخ الرابط مباشرة من الصندوق أعلاه.")
+    st.caption(f"تم التسجيل بالبريد: {checked_in_email} | الاجتماع: {meeting_day}")
