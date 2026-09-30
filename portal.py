@@ -3,6 +3,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 import json
+import re
 from datetime import datetime, time as dt_time
 import pytz
 import requests
@@ -17,7 +18,7 @@ MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # ==========================================
-# ⏰ إعدادات أوقات البوابة (يمكنك التعديل هنا)
+# ⏰ إعدادات أوقات البوابة
 # ==========================================
 
 # أوقات يوم الأحد
@@ -26,10 +27,13 @@ SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 22, 50  # 10:50 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 8:50 PM (تأكد من رغبتك بهذا الوقت)
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
 ROOM_LOCK_MINUTES = 20
+
+# مهلة الاتصال بسكربت جوجل (بالثواني)
+GAS_TIMEOUT = 15
 
 # ==========================================
 # 🔧 Helper Functions & Caching
@@ -40,6 +44,11 @@ def format_time_arabic(hour, minute):
     h12 = hour % 12
     h12 = 12 if h12 == 0 else h12
     return f"{h12}:{minute:02d} {period}"
+
+def is_valid_email(email):
+    """التحقق من صحة صيغة البريد الإلكتروني"""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
 
 @st.cache_resource
 def get_google_client():
@@ -160,6 +169,28 @@ if selected_meeting not in available_meetings:
 
 st.info(f"📌 اجتماع اليوم: **{selected_meeting}**")
 st.markdown("<br>", unsafe_allow_html=True)
+
+# ==========================================
+# ✅ التحقق من عدم وجود تسجيل سابق في نفس الجلسة
+# ==========================================
+if st.session_state.get('check_in_success', False):
+    st.markdown("---")
+    st.success("✅ تم تسجيل حضورك بنجاح في هذه الجلسة! شكراً لأمانتك.")
+    
+    zoom_link = st.session_state['zoom_link']
+    checked_in_email = st.session_state['checked_in_email']
+    meeting_day = st.session_state['selected_meeting']
+    
+    st.markdown("### 🔗 رابط زووم المباشر")
+    st.markdown("**اضغط على أيقونة النسخ في الزاوية العلوية للصندوق لنسخ الرابط:**")
+    st.code(zoom_link, language=None)
+    
+    st.caption(f"تم التسجيل بالبريد: {checked_in_email} | الاجتماع: {meeting_day}")
+    st.stop()  # إيقاف أي إمكانية لإعادة التسجيل في نفس الجلسة
+
+# ==========================================
+# 📝 إدخال البريد الإلكتروني
+# ==========================================
 user_email = st.text_input("البريد الإلكتروني المسجل (Registered Email):").strip().lower()
 
 # --- عهد التعافي ---
@@ -172,8 +203,15 @@ pledge = st.checkbox("أتعهد بصدق وأمانة أمام نفسي وتج�
 # ==========================================
 if pledge:
     if st.button("تسجيل الحضور وعرض الرابط (Check-In)", use_container_width=True):
+        
+        # التحقق من إدخال البريد
         if not user_email:
-            st.warning("يرجى إدخال البريد الإلكتروني.")
+            st.warning("⚠️ يرجى إدخال البريد الإلكتروني.")
+        
+        # التحقق من صحة صيغة البريد
+        elif not is_valid_email(user_email):
+            st.error("❌ صيغة البريد الإلكتروني غير صحيحة. يرجى التأكد من الكتابة.")
+        
         else:
             with st.spinner("جاري التحقق من السجلات..."):
                 try:
@@ -186,48 +224,53 @@ if pledge:
                     if user_email in registered_emails:
                         # تجهيز البيانات للإرسال
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
-                        script_url = "https://script.google.com/macros/s/AKfycbxfzsr557Qoslr5ELJmMDxfF2ouSjx7frKGCp7vqlWyBimyKoI3nCfAgiQpxBmtDwvedQ/exec"
+                        
+                        # ✅ قراءة الرابط والمفتاح السري من الـ Secrets (أمان أعلى)
+                        try:
+                            script_url = st.secrets["gas_script_url"]
+                            script_secret = st.secrets["gas_script_secret"]
+                        except KeyError:
+                            st.error("⚠️ خطأ في إعدادات النظام: مفاتيح gas_script_url أو gas_script_secret غير موجودة في secrets.toml")
+                            st.stop()
 
                         payload = {
                             "target_id": target_id,
                             "timestamp": baghdad_time,
-                            "email": user_email
+                            "email": user_email,
+                            "secret": script_secret  # ✅ إرسال المفتاح السري للتحقق
                         }
 
-                        # إرسال البيانات لسكربت جوجل بدلاً من الكتابة المباشرة
-                        response = requests.post(script_url, data=payload)
+                        # ✅ إرسال البيانات مع timeout لمنع التجمد
+                        try:
+                            response = requests.post(
+                                script_url, 
+                                data=payload, 
+                                timeout=GAS_TIMEOUT
+                            )
+                        except requests.exceptions.Timeout:
+                            st.error("❌ انتهت مهلة الاتصال بالخادم. يرجى المحاولة مرة أخرى.")
+                            st.stop()
+                        except requests.exceptions.RequestException as req_err:
+                            st.error(f"❌ خطأ في الاتصال بالخادم: {req_err}")
+                            st.stop()
 
-                        if response.text == "Success":
-                            # حفظ البيانات في session_state لعرضها بعد إعادة التحميل
+                        # ✅ التحقق من نجاح العملية بشكل مرن
+                        if "Success" in response.text:
                             st.session_state['check_in_success'] = True
                             st.session_state['zoom_link'] = zoom_link
                             st.session_state['checked_in_email'] = user_email
                             st.session_state['selected_meeting'] = selected_meeting
                             
                             st.rerun()
+                        elif "Unauthorized" in response.text:
+                            st.error("🔒 خطأ في المصادقة مع الخادم. يرجى التواصل مع المسؤول.")
                         else:
-                            st.error(f"حدث خطأ أثناء حفظ البيانات: {response.text}")
+                            st.error(f"حدث خطأ أثناء حفظ البيانات: {response.text[:200]}")
                             
                     else:
                         st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التأكد من البريد أو تقديم طلب انضمام.")
+                
                 except Exception as e:
-                    st.error(f"حدث خطأ أثناء تسجيل الحضور: {e}")
+                    st.error(f"حدث خطأ غير متوقع: {e}")
 else:
     st.info("💡 يرجى وضع علامة (صح) على التعهد أعلاه لتفعيل زر الدخول.")
-
-# ==========================================
-# ✅ عرض النتيجة بعد التسجيل الناجح
-# ==========================================
-if st.session_state.get('check_in_success', False):
-    st.markdown("---")
-    st.success("✅ تم تسجيل حضورك بنجاح! شكراً لأمانتك.")
-    
-    zoom_link = st.session_state['zoom_link']
-    checked_in_email = st.session_state['checked_in_email']
-    meeting_day = st.session_state['selected_meeting']
-    
-    st.markdown("### 🔗 رابط زووم المباشر")
-    st.markdown("**اضغط على أيقونة النسخ في الزاوية العلوية للصندوق لنسخ الرابط:**")
-    st.code(zoom_link, language=None)
-    
-    st.caption(f"تم التسجيل بالبريد: {checked_in_email} | الاجتماع: {meeting_day}")
