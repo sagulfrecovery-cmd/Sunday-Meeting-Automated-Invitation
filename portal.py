@@ -25,7 +25,7 @@ SUN_OPEN_HOUR, SUN_OPEN_MIN = 20, 45    # 8:45 PM
 SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 # أوقات يوم الأربعاء
-WED_OPEN_HOUR, WED_OPEN_MIN = 00, 00    # 8:15 PM
+WED_OPEN_HOUR, WED_OPEN_MIN = 00, 01    # 8:15 PM
 WED_CLOSE_HOUR, WED_CLOSE_MIN = 20, 50  # 10:50 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
