@@ -18,19 +18,20 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # ==========================================
 
 # أوقات يوم الأحد
-SUN_OPEN_HOUR, SUN_OPEN_MIN = 20, 45    # 6:00 PM
-SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20 # 9:20 PM
+SUN_OPEN_HOUR, SUN_OPEN_MIN = 20, 45    # 8:45 PM
+SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 # أوقات يوم الأربعاء
-WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 6:00 PM
+WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
 WED_CLOSE_HOUR, WED_CLOSE_MIN = 20, 50  # 8:50 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق - تستخدم في رسالة التنبيه)
 ROOM_LOCK_MINUTES = 20
 
 # ==========================================
+# 🔧 Helper Functions & Caching
+# ==========================================
 
-# --- HELPER FUNCTIONS ---
 def format_time_arabic(hour, minute):
     """دالة لتحويل الوقت من 24 ساعة إلى 12 ساعة مع صباحاً/مساءً بشكل آلي"""
     period = "مساءً" if hour >= 12 else "صباحاً"
@@ -44,6 +45,22 @@ def get_google_client():
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
+
+# تخزين الإعدادات الأساسية للاجتماعات لمدة 10 دقائق (600 ثانية)
+@st.cache_data(ttl=600)
+def get_meetings_data():
+    client = get_google_client()
+    master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
+    return pd.DataFrame(master_sheet.get_all_records())
+
+# تخزين قائمة البريد الإلكتروني المسموح لها بالدخول لمدة 5 دقائق (300 ثانية)
+@st.cache_data(ttl=300)
+def get_registered_emails(target_sheet_id):
+    client = get_google_client()
+    target_db = client.open_by_key(target_sheet_id)
+    reg_tab = target_db.worksheet("Registration")
+    reg_df = pd.DataFrame(reg_tab.get_all_records())
+    return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
 
 def send_zoom_email(recipient_email, meeting_day, zoom_link):
     sender = st.secrets["sender_email"]
@@ -63,7 +80,9 @@ def send_zoom_email(recipient_email, meeting_day, zoom_link):
     except Exception:
         pass 
 
-# --- UI SETUP (Page config must be first Streamlit call) ---
+# ==========================================
+# 🖥️ UI SETUP
+# ==========================================
 st.set_page_config(page_title="بوابة زمالة الخليج", page_icon="📖")
 
 # ==========================================
@@ -108,7 +127,7 @@ if not is_open:
         f"- **الأربعاء:** من الساعة {wed_open_str} حتى {wed_close_str}\n"
         f"*(بتوقيت بغداد)*"
     )
-    st.stop()  
+    st.stop()  # يتوقف الكود هنا ولا يتصل بجوجل إذا كانت البوابة مغلقة
 
 # ==========================================
 # ✅ واجهة التطبيق الرئيسية (تظهر فقط وقت السماح أو أثناء الاختبار)
@@ -122,16 +141,15 @@ st.markdown("---")
 st.markdown(f"""
 <div style="background-color: #ffe6e6; padding: 15px; border-radius: 8px; border: 2px solid red; text-align: center; margin-bottom: 25px;">
     <h3 style="color: #c62828; margin: 0; font-weight: bold; line-height: 1.4;">
-        ⚠️ يرجى العلم أن الغرفة ستغلق بعد {ROOM_LOCK_MINUTES} دقيقة من بداية الاجتماع ولن يتم قبول أي شخص بعد هذا الوقت.
+        ⚠️️ يرجى العلم أن الغرفة ستغلق بعد {ROOM_LOCK_MINUTES} دقيقة من بداية الاجتماع ولن يتم قبول أي شخص بعد هذا الوقت.
     </h3>
 </div>
 """, unsafe_allow_html=True)
 
 # --- MAIN LOGIC ---
 try:
-    client = get_google_client()
-    master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
-    meetings_data = pd.DataFrame(master_sheet.get_all_records())
+    # استخدام الكاش بدلاً من الاتصال المباشر بجوجل
+    meetings_data = get_meetings_data()
     available_meetings = [str(x).strip() for x in meetings_data['Meeting Day'].tolist()]
 except Exception as e:
     st.error(f"System Error: {e}")
@@ -141,7 +159,7 @@ except Exception as e:
 # التحديد التلقائي لليوم (أثناء الاختبار، إذا لم يكن الأحد أو الأربعاء، سنفترض اجتماع الأحد للتجربة)
 # ==========================================
 if weekday == 6 or (is_testing and weekday not in [6, 2]):
-    selected_meeting = "الأربعاء"
+    selected_meeting = "الأحد"
 elif weekday == 2:
     selected_meeting = "الأربعاء"
 else:
@@ -173,13 +191,14 @@ if pledge:
                     target_id = str(meeting_info['Target Sheet ID']).strip()
                     zoom_link = str(meeting_info['Zoom Link']).strip()
                     
-                    target_db = client.open_by_key(target_id)
-                    reg_tab = target_db.worksheet("Registration")
-                    reg_df = pd.DataFrame(reg_tab.get_all_records())
-                    
-                    registered_emails = reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
+                    # جلب الإيميلات من الكاش بدون استهلاك طلبات جديدة
+                    registered_emails = get_registered_emails(target_id)
 
                     if user_email in registered_emails:
+                        # عملية الكتابة فقط هي التي تتصل بجوجل مباشرة
+                        client = get_google_client()
+                        target_db = client.open_by_key(target_id)
+                        
                         try:
                             check_in_tab = target_db.worksheet("Check-In Log")
                         except gspread.exceptions.WorksheetNotFound:
