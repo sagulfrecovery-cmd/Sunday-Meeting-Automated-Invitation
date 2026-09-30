@@ -228,7 +228,7 @@ if st.session_state.get('check_in_success', False):
     checked_in_email = st.session_state['checked_in_email']
     meeting_day = st.session_state['selected_meeting']
     
-    st.markdown("### 🔗 رابط زووم المباشر - يمنع مشاركة الرابط مع أي شخص آخر أو نشره حتى لو كان داخل الزمالة")
+    st.markdown("### 🔗 رابط زووم المباشر")
     st.markdown("**اضغط على أيقونة النسخ في الزاوية العلوية للصندوق لنسخ الرابط:**")
     st.code(zoom_link, language=None)
     
