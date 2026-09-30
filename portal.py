@@ -27,7 +27,7 @@ SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 8:50 PM (تأكد من رغبتك بهذا الوقت)
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 11:50 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
 ROOM_LOCK_MINUTES = 20
@@ -52,7 +52,13 @@ def is_valid_email(email):
 
 @st.cache_resource
 def get_google_client():
-    creds_dict = json.loads(st.secrets["gcp_service_account"])
+    # التحقق الآمن من نوع بيانات الاعتماد (سواء كانت String أو AttrDict/dict)
+    raw_creds = st.secrets["gcp_service_account"]
+    if isinstance(raw_creds, str):
+        creds_dict = json.loads(raw_creds)
+    else:
+        creds_dict = dict(raw_creds)
+        
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
@@ -225,7 +231,7 @@ if pledge:
                         # تجهيز البيانات للإرسال
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
                         
-                        # ✅ قراءة الرابط والمفتاح السري من الـ Secrets (أمان أعلى)
+                        # ✅ قراءة الرابط والمفتاح السري من الـ Secrets
                         try:
                             script_url = st.secrets["gas_script_url"]
                             script_secret = st.secrets["gas_script_secret"]
