@@ -26,7 +26,7 @@ SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 10:50 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 11:50 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
 ROOM_LOCK_MINUTES = 20
@@ -43,27 +43,6 @@ def format_time_arabic(hour, minute):
 
 @st.cache_resource
 def get_google_client():
-    creds_dict = json.loads(st.secrets["gcp_service_account"])
-    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    
-    # آلية إعادة المحاولة عند حدوث خطأ 429 (Quota Exceeded)
-    session = AuthorizedSession(creds)
-    retry = Retry(
-        total=5,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET", "POST"]
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount('https://', adapter)
-    session.mount('http://', adapter)
-    
-    return gspread.Client(auth=creds, session=session)
-
-@st.cache_resource
-def get_google_client():
-    # التحقق الذكي: إذا كان الأسرار نصاً نحوله لـ json، وإذا كان قاموساً (AttrDict) ناخذه مباشرة
     raw_creds = st.secrets["gcp_service_account"]
     if isinstance(raw_creds, str):
         creds_dict = json.loads(raw_creds)
@@ -86,6 +65,20 @@ def get_google_client():
     session.mount('http://', adapter)
     
     return gspread.Client(auth=creds, session=session)
+
+@st.cache_data(ttl=3600)
+def get_meetings_data():
+    client = get_google_client()
+    master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
+    return pd.DataFrame(master_sheet.get_all_records())
+
+@st.cache_data(ttl=900)
+def get_registered_emails(target_sheet_id):
+    client = get_google_client()
+    target_db = client.open_by_key(target_sheet_id)
+    reg_tab = target_db.worksheet("Registration")
+    reg_df = pd.DataFrame(reg_tab.get_all_records())
+    return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
 
 # ==========================================
 # 🖥️ UI SETUP
