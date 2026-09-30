@@ -26,7 +26,7 @@ SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 22, 50  # 8:50 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 22, 50  # 10:50 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
 ROOM_LOCK_MINUTES = 20
@@ -74,21 +74,6 @@ def get_registered_emails(target_sheet_id):
     reg_tab = target_db.worksheet("Registration")
     reg_df = pd.DataFrame(reg_tab.get_all_records())
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
-
-@st.cache_resource
-def get_spreadsheet(spreadsheet_id):
-    client = get_google_client()
-    return client.open_by_key(spreadsheet_id)
-
-@st.cache_resource
-def get_check_in_tab(spreadsheet_id):
-    spreadsheet = get_spreadsheet(spreadsheet_id)
-    try:
-        return spreadsheet.worksheet("Check-In Log")
-    except gspread.exceptions.WorksheetNotFound:
-        ws = spreadsheet.add_worksheet(title="Check-In Log", rows="1000", cols="2")
-        ws.append_row(["Timestamp", "Email"])
-        return ws
 
 # ==========================================
 # 🖥️ UI SETUP
@@ -148,7 +133,7 @@ st.markdown("---")
 st.markdown(f"""
 <div style="background-color: #ffe6e6; padding: 15px; border-radius: 8px; border: 2px solid red; text-align: center; margin-bottom: 25px;">
     <h3 style="color: #c62828; margin: 0; font-weight: bold; line-height: 1.4;">
-        ⚠️️ يرجى العلم أن الغرفة ستغلق بعد {ROOM_LOCK_MINUTES} دقيقة من بداية الاجتماع ولن يتم قبول أي شخص بعد هذا الوقت.
+        ⚠ يرجى العلم أن الغرفة ستغلق بعد {ROOM_LOCK_MINUTES} دقيقة من بداية الاجتماع ولن يتم قبول أي شخص بعد هذا الوقت.
     </h3>
 </div>
 """, unsafe_allow_html=True)
@@ -199,38 +184,30 @@ if pledge:
                     registered_emails = get_registered_emails(target_id)
 
                     if user_email in registered_emails:
-                        # تسجيل الحضور مباشرة
                         # تجهيز البيانات للإرسال
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
                         script_url = "https://script.google.com/macros/s/AKfycbxfzsr557Qoslr5ELJmMDxfF2ouSjx7frKGCp7vqlWyBimyKoI3nCfAgiQpxBmtDwvedQ/exec"
 
                         payload = {
-                          "target_id": target_id,
-                          "timestamp": baghdad_time,
-                          "email": user_email
+                            "target_id": target_id,
+                            "timestamp": baghdad_time,
+                            "email": user_email
                         }
 
-# إرسال البيانات لسكربت جوجل بدلاً من الكتابة المباشرة
-response = requests.post(script_url, data=payload)
+                        # إرسال البيانات لسكربت جوجل بدلاً من الكتابة المباشرة
+                        response = requests.post(script_url, data=payload)
 
-if response.text == "Success":
-    # حفظ البيانات في session_state لعرضها بعد إعادة التحميل
-    st.session_state['check_in_success'] = True
-    st.session_state['zoom_link'] = zoom_link
-    st.session_state['checked_in_email'] = user_email
-    st.session_state['selected_meeting'] = selected_meeting
-    
-    st.rerun()
-else:
-    st.error(f"حدث خطأ أثناء حفظ البيانات: {response.text}")
-                        
-                        # حفظ البيانات في session_state لعرضها بعد إعادة التحميل
-                        st.session_state['check_in_success'] = True
-                        st.session_state['zoom_link'] = zoom_link
-                        st.session_state['checked_in_email'] = user_email
-                        st.session_state['selected_meeting'] = selected_meeting
-                        
-                        st.rerun()
+                        if response.text == "Success":
+                            # حفظ البيانات في session_state لعرضها بعد إعادة التحميل
+                            st.session_state['check_in_success'] = True
+                            st.session_state['zoom_link'] = zoom_link
+                            st.session_state['checked_in_email'] = user_email
+                            st.session_state['selected_meeting'] = selected_meeting
+                            
+                            st.rerun()
+                        else:
+                            st.error(f"حدث خطأ أثناء حفظ البيانات: {response.text}")
+                            
                     else:
                         st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التأكد من البريد أو تقديم طلب انضمام.")
                 except Exception as e:
