@@ -43,7 +43,14 @@ def format_time_arabic(hour, minute):
 
 @st.cache_resource
 def get_google_client():
-    creds_dict = json.loads(st.secrets["gcp_service_account"])
+    # التعامل الآمن مع الأسرار سواء كانت نصية أو كائن مفسر مسبقاً
+    secret_data = st.secrets["gcp_service_account"]
+    if isinstance(secret_data, str):
+        creds_dict = json.loads(secret_data)
+    else:
+        # تحويل AttrDict أو الـ dict إلى dict عادي لتجنب مشاكل التعديل
+        creds_dict = dict(secret_data)
+        
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
