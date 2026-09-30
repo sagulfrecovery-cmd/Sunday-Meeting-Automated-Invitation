@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 import json
 from datetime import datetime, time as dt_time
 import pytz
+import requests
 
 # --- مكتبات إضافية لآلية إعادة المحاولة ---
 from google.auth.transport.requests import AuthorizedSession
@@ -199,9 +200,29 @@ if pledge:
 
                     if user_email in registered_emails:
                         # تسجيل الحضور مباشرة
-                        check_in_tab = get_check_in_tab(target_id)
+                        # تجهيز البيانات للإرسال
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
-                        check_in_tab.append_row([baghdad_time, user_email])
+                        script_url = "https://script.google.com/macros/s/AKfycbxfzsr557Qoslr5ELJmMDxfF2ouSjx7frKGCp7vqlWyBimyKoI3nCfAgiQpxBmtDwvedQ/exec"
+
+                        payload = {
+                          "target_id": target_id,
+                          "timestamp": baghdad_time,
+                          "email": user_email
+                        }
+
+# إرسال البيانات لسكربت جوجل بدلاً من الكتابة المباشرة
+response = requests.post(script_url, data=payload)
+
+if response.text == "Success":
+    # حفظ البيانات في session_state لعرضها بعد إعادة التحميل
+    st.session_state['check_in_success'] = True
+    st.session_state['zoom_link'] = zoom_link
+    st.session_state['checked_in_email'] = user_email
+    st.session_state['selected_meeting'] = selected_meeting
+    
+    st.rerun()
+else:
+    st.error(f"حدث خطأ أثناء حفظ البيانات: {response.text}")
                         
                         # حفظ البيانات في session_state لعرضها بعد إعادة التحميل
                         st.session_state['check_in_success'] = True
