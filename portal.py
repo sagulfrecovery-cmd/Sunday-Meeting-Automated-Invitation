@@ -43,16 +43,29 @@ def format_time_arabic(hour, minute):
 
 @st.cache_resource
 def get_google_client():
-    raw_creds = st.secrets["gcp_service_account"]
+    # محاولة قراءة الحساب من الـ secrets بأكثر من طريقة لمنع الانهيار
+    try:
+        raw_creds = st.secrets["gcp_service_account"]
+    except KeyError:
+        st.error("❌ خطأ: قسم gcp_service_account غير موجود في الـ Secrets. تأكد من إضافته في إعدادات Streamlit.")
+        st.stop()
+        
     if isinstance(raw_creds, str):
         creds_dict = json.loads(raw_creds)
     else:
         creds_dict = dict(raw_creds)
         
-    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    # التحقق الآمن من وجود المفتاح بأي صيغة (مكتوب بحروف صغيرة أو كبيرة)
+    private_key_val = creds_dict.get("private_key") or creds_dict.get("PRIVATE_KEY")
+    
+    if not private_key_val:
+        st.error("❌ الخطأ هنا: لم يتم العثور على 'private_key' داخل بيانات الحساب. تأكد من لصق محتوى ملف JSON كاملاً في الـ Secrets.")
+        st.stop()
+        
+    creds_dict["private_key"] = private_key_val.replace("\\n", "\n")
+    
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
-    # آلية إعادة المحاولة عند حدوث خطأ 429 (Quota Exceeded)
     session = AuthorizedSession(creds)
     retry = Retry(
         total=5,
@@ -65,7 +78,6 @@ def get_google_client():
     session.mount('http://', adapter)
     
     return gspread.Client(auth=creds, session=session)
-
 @st.cache_data(ttl=3600)
 def get_meetings_data():
     client = get_google_client()
