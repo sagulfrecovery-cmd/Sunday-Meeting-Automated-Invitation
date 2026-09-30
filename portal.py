@@ -2,33 +2,23 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-import json
 from datetime import datetime, time as dt_time
 import pytz
 import requests
-
-# --- مكتبات إضافية لآلية إعادة المحاولة ---
-from google.auth.transport.requests import AuthorizedSession
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 # --- CONFIGURATION ---
 MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # ==========================================
-# ⏰ إعدادات أوقات البوابة (يمكنك التعديل هنا)
+# ⏰ إعدادات أوقات البوابة
 # ==========================================
-
-# أوقات يوم الأحد
 SUN_OPEN_HOUR, SUN_OPEN_MIN = 20, 45    # 8:45 PM
 SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
-# أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 20, 50  # 10:50 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 10:50 PM
 
-# مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
 ROOM_LOCK_MINUTES = 20
 
 # ==========================================
@@ -43,23 +33,10 @@ def format_time_arabic(hour, minute):
 
 @st.cache_resource
 def get_google_client():
+    # استخدام البيانات مباشرة كقاموس من إعدادات TOML
     creds_dict = dict(st.secrets["gcp_service_account"])
-    
-    # المفتاح الآن جاهز ويحتوي على أسطر حقيقية بفضل تنسيق TOML الصحيح
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    
-    session = AuthorizedSession(creds)
-    retry = Retry(
-        total=5,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET", "POST"]
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount('https://', adapter)
-    session.mount('http://', adapter)
-    
-    return gspread.Client(auth=creds, session=session)
+    return gspread.Client(auth=creds)
 
 @st.cache_data(ttl=3600)
 def get_meetings_data():
@@ -184,7 +161,6 @@ if pledge:
                     registered_emails = get_registered_emails(target_id)
 
                     if user_email in registered_emails:
-                        # تجهيز البيانات للإرسال
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
                         script_url = "https://script.google.com/macros/s/AKfycby4pH_ELy-H57Zan-xF34GCdbXVXRI8xEIRctbsM5EsZ5EFPPgbgY6Oxk1ZKZwV6JhbbQ/exec"
 
@@ -194,20 +170,17 @@ if pledge:
                             "email": user_email
                         }
 
-                        # إرسال البيانات لسكربت جوجل بدلاً من الكتابة المباشرة
                         response = requests.post(script_url, data=payload)
 
                         if response.text == "Success":
-                            # حفظ البيانات في session_state لعرضها بعد إعادة التحميل
                             st.session_state['check_in_success'] = True
                             st.session_state['zoom_link'] = zoom_link
-                            st.session_state['checked_in_email'] = user_email
+                            st.session_state['checked_in_email']  = user_email
                             st.session_state['selected_meeting'] = selected_meeting
                             
                             st.rerun()
                         else:
                             st.error(f"حدث خطأ أثناء حفظ البيانات: {response.text}")
-                            
                     else:
                         st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التأكد من البريد أو تقديم طلب انضمام.")
                 except Exception as e:
