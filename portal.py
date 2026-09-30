@@ -43,26 +43,36 @@ def format_time_arabic(hour, minute):
 
 @st.cache_resource
 def get_google_client():
-    # محاولة قراءة الحساب من الـ secrets بأكثر من طريقة لمنع الانهيار
     try:
         raw_creds = st.secrets["gcp_service_account"]
     except KeyError:
-        st.error("❌ خطأ: قسم gcp_service_account غير موجود في الـ Secrets. تأكد من إضافته في إعدادات Streamlit.")
+        st.error("❌ خطأ: قسم [gcp_service_account] غير موجود في الـ Secrets.")
         st.stop()
         
+    # تحويل البيانات إلى قاموس قياسي
     if isinstance(raw_creds, str):
         creds_dict = json.loads(raw_creds)
     else:
         creds_dict = dict(raw_creds)
         
-    # التحقق الآمن من وجود المفتاح بأي صيغة (مكتوب بحروف صغيرة أو كبيرة)
-    private_key_val = creds_dict.get("private_key") or creds_dict.get("PRIVATE_KEY")
-    
+    # البحث الشامل عن المفتاح بأي شكل محتمل (حروف صغيرة، كبيرة، أو بدائل)
+    private_key_val = None
+    for key in creds_dict.keys():
+        if "private_key" in key.lower() or "key" in key.lower():
+            if isinstance(creds_dict[key], str) and "BEGIN PRIVATE KEY" in creds_dict[key]:
+                private_key_val = creds_dict[key]
+                break
+                
     if not private_key_val:
-        st.error("❌ الخطأ هنا: لم يتم العثور على 'private_key' داخل بيانات الحساب. تأكد من لصق محتوى ملف JSON كاملاً في الـ Secrets.")
+        # محاولة أخيرة للبحث التقليدي
+        private_key_val = creds_dict.get("private_key") or creds_dict.get("PRIVATE_KEY")
+        
+    if not private_key_val:
+        st.error("❌ خطأ: لم يتم العثور على محتوى الـ private_key الصحيح داخل إعدادات gcp_service_account.")
         st.stop()
         
-    creds_dict["private_key"] = private_key_val.replace("\\n", "\n")
+    # تصحيح الـ Newlines بشكل آمن
+    creds_dict["private_key"] = private_key_val.replace("\\n", "\n").replace("\n\n", "\n")
     
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
