@@ -43,18 +43,11 @@ def format_time_arabic(hour, minute):
 
 @st.cache_resource
 def get_google_client():
-    # التعامل الآمن مع الأسرار سواء كانت نصية أو كائن مفسر مسبقاً
-    secret_data = st.secrets["gcp_service_account"]
-    if isinstance(secret_data, str):
-        creds_dict = json.loads(secret_data)
-    else:
-        # تحويل AttrDict أو الـ dict إلى dict عادي لتجنب مشاكل التعديل
-        creds_dict = dict(secret_data)
-        
-    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    
+    # المفتاح الآن جاهز ويحتوي على أسطر حقيقية بفضل تنسيق TOML الصحيح
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
-    # آلية إعادة المحاولة عند حدوث خطأ 429 (Quota Exceeded)
     session = AuthorizedSession(creds)
     retry = Retry(
         total=5,
