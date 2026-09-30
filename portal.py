@@ -26,7 +26,7 @@ SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 11:50 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 10:50 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
 ROOM_LOCK_MINUTES = 20
@@ -43,39 +43,11 @@ def format_time_arabic(hour, minute):
 
 @st.cache_resource
 def get_google_client():
-    try:
-        raw_creds = st.secrets["gcp_service_account"]
-    except KeyError:
-        st.error("❌ خطأ: قسم [gcp_service_account] غير موجود في الـ Secrets.")
-        st.stop()
-        
-    # تحويل البيانات إلى قاموس قياسي
-    if isinstance(raw_creds, str):
-        creds_dict = json.loads(raw_creds)
-    else:
-        creds_dict = dict(raw_creds)
-        
-    # البحث الشامل عن المفتاح بأي شكل محتمل (حروف صغيرة، كبيرة، أو بدائل)
-    private_key_val = None
-    for key in creds_dict.keys():
-        if "private_key" in key.lower() or "key" in key.lower():
-            if isinstance(creds_dict[key], str) and "BEGIN PRIVATE KEY" in creds_dict[key]:
-                private_key_val = creds_dict[key]
-                break
-                
-    if not private_key_val:
-        # محاولة أخيرة للبحث التقليدي
-        private_key_val = creds_dict.get("private_key") or creds_dict.get("PRIVATE_KEY")
-        
-    if not private_key_val:
-        st.error("❌ خطأ: لم يتم العثور على محتوى الـ private_key الصحيح داخل إعدادات gcp_service_account.")
-        st.stop()
-        
-    # تصحيح الـ Newlines بشكل آمن
-    creds_dict["private_key"] = private_key_val.replace("\\n", "\n").replace("\n\n", "\n")
-    
+    creds_dict = json.loads(st.secrets["gcp_service_account"])
+    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
+    # آلية إعادة المحاولة عند حدوث خطأ 429 (Quota Exceeded)
     session = AuthorizedSession(creds)
     retry = Retry(
         total=5,
@@ -88,6 +60,7 @@ def get_google_client():
     session.mount('http://', adapter)
     
     return gspread.Client(auth=creds, session=session)
+
 @st.cache_data(ttl=3600)
 def get_meetings_data():
     client = get_google_client()
@@ -216,12 +189,12 @@ if pledge:
                         script_url = "https://script.google.com/macros/s/AKfycby4pH_ELy-H57Zan-xF34GCdbXVXRI8xEIRctbsM5EsZ5EFPPgbgY6Oxk1ZKZwV6JhbbQ/exec"
 
                         payload = {
-                          "target_id": target_id,
-                          "timestamp": baghdad_time,
-                          "email": user_email
+                            "target_id": target_id,
+                            "timestamp": baghdad_time,
+                            "email": user_email
                         }
 
-                        # إرسال البيانات لسكربت جوجل بدلاً من الكتابة المباشرة (حل التزامن)
+                        # إرسال البيانات لسكربت جوجل بدلاً من الكتابة المباشرة
                         response = requests.post(script_url, data=payload)
 
                         if response.text == "Success":
@@ -234,9 +207,9 @@ if pledge:
                             st.rerun()
                         else:
                             st.error(f"حدث خطأ أثناء حفظ البيانات: {response.text}")
+                            
                     else:
                         st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التأكد من البريد أو تقديم طلب انضمام.")
-                
                 except Exception as e:
                     st.error(f"حدث خطأ أثناء تسجيل الحضور: {e}")
 else:
