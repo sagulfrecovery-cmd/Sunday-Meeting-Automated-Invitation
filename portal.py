@@ -206,8 +206,7 @@ if pledge:
                     if user_email in registered_emails:
                         # تجهيز البيانات للإرسال
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
-                        script_url = "https://script.google.com/macros/s/AKfycby4pH_ELy-H57Zan-xF34GCdbXVXRI8xEIRctbsM5EsZ5EFPPgbgY6Oxk1ZKZwV6JhbbQ/exec"
-
+                        script_url = st.secrets["gas_script_url"]
                         payload = {
                             "target_id": target_id,
                             "timestamp": baghdad_time,
