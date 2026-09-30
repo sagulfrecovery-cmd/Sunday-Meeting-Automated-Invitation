@@ -26,7 +26,7 @@ SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 # أوقات يوم الأربعاء
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 8:50 PM
+WED_CLOSE_HOUR, WED_CLOSE_MIN = 23, 50  # 11:50 PM
 
 # مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
 ROOM_LOCK_MINUTES = 20
@@ -46,8 +46,19 @@ def format_time_arabic(hour, minute):
 
 @st.cache_resource
 def get_google_client():
-    creds_dict = json.loads(st.secrets["gcp_service_account"])
+    # ✅ الإصلاح: التعامل مع الصيغتين (نص JSON أو قسم TOML/AttrDict)
+    gcp_secrets = st.secrets["gcp_service_account"]
+    
+    if isinstance(gcp_secrets, str):
+        # إذا كانت نص JSON
+        creds_dict = json.loads(gcp_secrets)
+    else:
+        # إذا كانت قسم TOML (AttrDict) - نُحوّلها إلى قاموس عادي
+        creds_dict = dict(gcp_secrets)
+    
+    # معالجة مفتاح private_key
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
     # آلية إعادة المحاولة عند حدوث خطأ 429 (Quota Exceeded)
@@ -134,7 +145,7 @@ if is_testing:
 st.markdown("---")
 
 # ==========================================
-# ✅ [تعديل #4] فحص النتيجة في أعلى الصفحة قبل عرض حقل الإدخال
+# ✅ فحص النتيجة في أعلى الصفحة قبل عرض حقل الإدخال
 # ==========================================
 if st.session_state.get('check_in_success', False):
     st.success("✅ تم تسجيل حضورك بنجاح! شكراً لأمانتك.")
@@ -148,7 +159,7 @@ if st.session_state.get('check_in_success', False):
     st.code(zoom_link, language=None)
     
     st.caption(f"تم التسجيل بالبريد: {checked_in_email} | الاجتماع: {meeting_day}")
-    st.stop()  # إيقاف عرض بقية الصفحة (لن يظهر حقل الإيميل ولا التعهد)
+    st.stop()
 
 st.markdown(f"""
 <div style="background-color: #ffe6e6; padding: 15px; border-radius: 8px; border: 2px solid red; text-align: center; margin-bottom: 25px;">
@@ -213,7 +224,7 @@ if pledge:
                             "email": user_email
                         }
 
-                        # ✅ [تعديل #2] إضافة timeout لمنع تجمد التطبيق
+                        # إضافة timeout لمنع تجمد التطبيق
                         try:
                             response = requests.post(script_url, data=payload, timeout=GAS_TIMEOUT)
                         except requests.exceptions.Timeout:
@@ -223,7 +234,7 @@ if pledge:
                             st.error(f"❌ خطأ في الاتصال بالخادم: {req_err}")
                             st.stop()
 
-                        # ✅ [تعديل #3] فحص مرن للاستجابة
+                        # فحص مرن للاستجابة
                         if "Success" in response.text:
                             st.session_state['check_in_success'] = True
                             st.session_state['zoom_link'] = zoom_link
