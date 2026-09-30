@@ -19,7 +19,6 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # ==========================================
 # ⏰ إعدادات أوقات البوابة (يمكنك التعديل هنا)
-# النظام يستخدم 24 ساعة (مثلاً 18 تعني 6 مساءً)
 # ==========================================
 
 # أوقات يوم الأحد
@@ -30,7 +29,7 @@ SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
 WED_CLOSE_HOUR, WED_CLOSE_MIN = 20, 50  # 8:50 PM
 
-# مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق - تستخدم في رسالة التنبيه)
+# مدة إغلاق الغرفة بعد بدء الاجتماع (بالدقائق)
 ROOM_LOCK_MINUTES = 20
 
 # ==========================================
@@ -38,7 +37,6 @@ ROOM_LOCK_MINUTES = 20
 # ==========================================
 
 def format_time_arabic(hour, minute):
-    """دالة لتحويل الوقت من 24 ساعة إلى 12 ساعة مع صباحاً/مساءً بشكل آلي"""
     period = "مساءً" if hour >= 12 else "صباحاً"
     h12 = hour % 12
     h12 = 12 if h12 == 0 else h12
@@ -50,11 +48,11 @@ def get_google_client():
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     
-    # ✅ التعديل 1: إعداد آلية إعادة المحاولة عند حدوث خطأ 429 (Quota Exceeded)
+    # آلية إعادة المحاولة عند حدوث خطأ 429
     session = AuthorizedSession(creds)
     retry = Retry(
-        total=5,  # عدد محاولات إعادة المحاولة
-        backoff_factor=1,  # الانتظار بين المحاولات (1، 2، 4، 8 ثواني)
+        total=5,
+        backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET", "POST"]
     )
@@ -64,14 +62,13 @@ def get_google_client():
     
     return gspread.Client(auth=creds, session=session)
 
-# ✅ التعديل 2: زيادة مدة الكاش لتقليل طلبات القراءة
-@st.cache_data(ttl=3600) # تم رفعها من 600 إلى 3600 ثانية (ساعة كاملة)
+@st.cache_data(ttl=3600)
 def get_meetings_data():
     client = get_google_client()
     master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
     return pd.DataFrame(master_sheet.get_all_records())
 
-@st.cache_data(ttl=900) # تم رفعها من 300 إلى 900 ثانية (15 دقيقة)
+@st.cache_data(ttl=900)
 def get_registered_emails(target_sheet_id):
     client = get_google_client()
     target_db = client.open_by_key(target_sheet_id)
@@ -79,13 +76,11 @@ def get_registered_emails(target_sheet_id):
     reg_df = pd.DataFrame(reg_tab.get_all_records())
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
 
-# ✅ التعديل 3: تخزين ملف الشيت في الكاش لتفادي فتحه مع كل عملية تسجيل
 @st.cache_resource
 def get_spreadsheet(spreadsheet_id):
     client = get_google_client()
     return client.open_by_key(spreadsheet_id)
 
-# ✅ التعديل 4: تخزين ورقة Check-In Log في الكاش (وإنشائها إذا لم تكن موجودة)
 @st.cache_resource
 def get_check_in_tab(spreadsheet_id):
     spreadsheet = get_spreadsheet(spreadsheet_id)
@@ -106,13 +101,10 @@ def send_zoom_email(recipient_email, meeting_day, zoom_link):
     msg['From'] = sender
     msg['To'] = recipient_email
 
-    try:
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login(sender, password)
-        server.send_message(msg)
-        server.quit()
-    except Exception:
-        pass 
+    server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+    server.login(sender, password)
+    server.send_message(msg)
+    server.quit()
 
 # ==========================================
 # 🖥️ UI SETUP
@@ -124,12 +116,10 @@ st.set_page_config(page_title="بوابة زمالة الخليج", page_icon="�
 # ==========================================
 baghdad_tz = pytz.timezone("Asia/Baghdad")
 now = datetime.now(baghdad_tz)
-weekday = now.weekday()  # 6 = الأحد، 2 = الأربعاء
+weekday = now.weekday()
 now_time = now.time()
 
-# التحقق من مفتاح وضع الاختبار من الـ Secrets (الافتراضي False إذا لم يتم إضافته)
 is_testing = st.secrets.get("test_mode", False)
-
 is_open = False
 
 if is_testing:
@@ -161,17 +151,16 @@ if not is_open:
         f"- **الأربعاء:** من الساعة {wed_open_str} حتى {wed_close_str}\n"
         f"*(بتوقيت بغداد)*"
     )
-    st.stop()  # يتوقف الكود هنا ولا يتصل بجوجل إذا كانت البوابة مغلقة
+    st.stop()
 
 # ==========================================
-# ✅ واجهة التطبيق الرئيسية (تظهر فقط وقت السماح أو أثناء الاختبار)
+# ✅ واجهة التطبيق الرئيسية
 # ==========================================
 st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
 if is_testing:
     st.warning("🛠️ **تنبيه:** البوابة تعمل حالياً في وضع الاختبار (Test Mode).")
 st.markdown("---")
 
-# رسالة التنبيه باللون الأحمر العريض
 st.markdown(f"""
 <div style="background-color: #ffe6e6; padding: 15px; border-radius: 8px; border: 2px solid red; text-align: center; margin-bottom: 25px;">
     <h3 style="color: #c62828; margin: 0; font-weight: bold; line-height: 1.4;">
@@ -182,16 +171,12 @@ st.markdown(f"""
 
 # --- MAIN LOGIC ---
 try:
-    # استخدام الكاش بدلاً من الاتصال المباشر بجوجل
     meetings_data = get_meetings_data()
     available_meetings = [str(x).strip() for x in meetings_data['Meeting Day'].tolist()]
 except Exception as e:
     st.error(f"System Error: {e}")
     st.stop()
 
-# ==========================================
-# التحديد التلقائي لليوم (أثناء الاختبار، إذا لم يكن الأحد أو الأربعاء، سنفترض اجتماع الأحد للتجربة)
-# ==========================================
 if weekday == 6 or (is_testing and weekday not in [6, 2]):
     selected_meeting = "الأحد"
 elif weekday == 2:
@@ -199,21 +184,22 @@ elif weekday == 2:
 else:
     selected_meeting = "الأحد"
 
-# التأكد أن اسم اليوم موجود في شيت جوجل الأساسي
 if selected_meeting not in available_meetings:
     st.error(f"⚠️ عذراً، لم يتم العثور على إعدادات اجتماع يوم **{selected_meeting}** في قاعدة البيانات.")
     st.stop()
 
 st.info(f"📌 اجتماع اليوم: **{selected_meeting}**")
-
 st.markdown("<br>", unsafe_allow_html=True)
 user_email = st.text_input("البريد الإلكتروني المسجل (Registered Email):").strip().lower()
 
-# --- عهد التعافي (Recovery Pledge) ---
+# --- عهد التعافي ---
 st.markdown("---")
 st.markdown("### 🤝 عهد التعافي")
 pledge = st.checkbox("أتعهد بصدق وأمانة أمام نفسي وتجاه زمالتي، أنني أسجل الآن بنية الحضور الفعلي للاجتماع في وقته المحدد.")
 
+# ==========================================
+# 🎯 عملية تسجيل الحضور
+# ==========================================
 if pledge:
     if st.button("تسجيل الحضور وعرض الرابط (Check-In)", use_container_width=True):
         if not user_email:
@@ -225,23 +211,52 @@ if pledge:
                     target_id = str(meeting_info['Target Sheet ID']).strip()
                     zoom_link = str(meeting_info['Zoom Link']).strip()
                     
-                    # جلب الإيميلات من الكاش بدون استهلاك طلبات جديدة
                     registered_emails = get_registered_emails(target_id)
 
                     if user_email in registered_emails:
-                        # ✅ التعديل 5: استخدام الورقة المخزنة في الكاش بدلاً من فتحها من جديد
+                        # ✅ تسجيل الحضور مباشرة (سريع، بدون انتظار الإيميل)
                         check_in_tab = get_check_in_tab(target_id)
-                        
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
                         check_in_tab.append_row([baghdad_time, user_email])
                         
-                        send_zoom_email(user_email, selected_meeting, zoom_link)
+                        # حفظ الرابط وبيانات أخرى في session_state لعرضها لاحقاً
+                        st.session_state['check_in_success'] = True
+                        st.session_state['zoom_link'] = zoom_link
+                        st.session_state['checked_in_email'] = user_email
+                        st.session_state['selected_meeting'] = selected_meeting
                         
-                        st.success("✅ تم تسجيل حضورك بنجاح! شكراً لأمانتك، تم إرسال الرابط إلى بريدك الإلكتروني.")
-                        st.info(f"🔗 **رابط زووم المباشر:**\n\n{zoom_link}")
+                        st.rerun()  # إعادة تحميل الصفحة لعرض النتيجة
                     else:
                         st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التأكد من البريد أو تقديم طلب انضمام.")
                 except Exception as e:
-                    st.error(f"حدث خطأ أثناء جلب البيانات: {e}")
+                    st.error(f"حدث خطأ أثناء تسجيل الحضور: {e}")
 else:
     st.info("💡 يرجى وضع علامة (صح) على التعهد أعلاه لتفعيل زر الدخول.")
+
+# ==========================================
+# ✅ عرض النتيجة بعد التسجيل الناجح
+# ==========================================
+if st.session_state.get('check_in_success', False):
+    st.markdown("---")
+    st.success("✅ تم تسجيل حضورك بنجاح! شكراً لأمانتك.")
+    
+    zoom_link = st.session_state['zoom_link']
+    checked_in_email = st.session_state['checked_in_email']
+    meeting_day = st.session_state['selected_meeting']
+    
+    st.markdown("### 🔗 رابط زووم المباشر")
+    st.markdown("**اضغط على أيقونة النسخ في الزاوية العلوية للصندوق لنسخ الرابط:**")
+    st.code(zoom_link, language=None)
+    
+    st.markdown("---")
+    st.markdown("### 📧 هل تريد إرسال الرابط إلى بريدك الإلكتروني؟")
+    st.caption("هذا الخيار اختياري، وقد يستغرق بضع ثوانٍ.")
+    
+    if st.button("📨 أرسل الرابط إلى بريدي", use_container_width=True):
+        with st.spinner("جاري إرسال الإيميل..."):
+            try:
+                send_zoom_email(checked_in_email, meeting_day, zoom_link)
+                st.success(f"✅ تم إرسال الرابط بنجاح إلى: {checked_in_email}")
+            except Exception as e:
+                st.error(f"❌ تعذر إرسال الإيميل: {e}")
+                st.info("💡 لا مشكلة! يمكنك نسخ الرابط مباشرة من الصندوق أعلاه.")
