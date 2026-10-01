@@ -31,13 +31,6 @@ def format_time_arabic(hour, minute):
     h12 = 12 if h12 == 0 else h12
     return f"{h12}:{minute:02d} {period}"
 
-@st.cache_resource
-def get_google_client():
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    return gspread.Client(auth=creds)
-
-# دالة مساعدة مع Retry لتفادي خطأ Quota 429
 def safe_execute(action_fn, max_retries=3, delay=1.5):
     for attempt in range(max_retries):
         try:
@@ -48,13 +41,19 @@ def safe_execute(action_fn, max_retries=3, delay=1.5):
                 continue
             raise e
 
+@st.cache_resource
+def get_google_client():
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    return gspread.Client(auth=creds)
+
 @st.cache_data(ttl=3600)
 def get_meetings_data():
     client = get_google_client()
     master_sheet = safe_execute(lambda: client.open_by_key(MASTER_SHEET_ID).sheet1)
     return pd.DataFrame(safe_execute(lambda: master_sheet.get_all_records()))
 
-@st.cache_data(ttl=1200)  # كاش لمدة 20 دقيقة لتفادي استهلاك Read Quota
+@st.cache_data(ttl=900)
 def get_registered_emails(target_sheet_id):
     client = get_google_client()
     target_db = safe_execute(lambda: client.open_by_key(target_sheet_id))
@@ -174,17 +173,15 @@ if pledge:
                     if user_email in registered_emails:
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
                         
-                        # --- التسجيل المباشر عبر gspread (العودة خطوة للوراء وإلغاء Apps Script) ---
+                        # --- التسجيل المباشر عبر gspread ---
                         client = get_google_client()
                         target_db = safe_execute(lambda: client.open_by_key(target_id))
                         
-                        # افتراضياً يُسجل الحضور في الشيت الأول أو شيت Attendance
                         try:
                             attendance_tab = safe_execute(lambda: target_db.worksheet("Attendance"))
                         except Exception:
                             attendance_tab = safe_execute(lambda: target_db.sheet1)
                             
-                        # كتابة الصف مباشرة مع الحماية من التجاوز 429
                         safe_execute(lambda: attendance_tab.append_row([baghdad_time, user_email]))
 
                         st.session_state['check_in_success'] = True
