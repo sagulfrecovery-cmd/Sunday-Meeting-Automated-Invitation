@@ -50,11 +50,13 @@ def get_google_client():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.Client(auth=creds)
 
-@st.cache_data(ttl=3600)
-def get_meetings_data():
-    client = get_google_client()
-    master_sheet = safe_execute(lambda: client.open_by_key(MASTER_SHEET_ID).sheet1)
-    return pd.DataFrame(safe_execute(lambda: master_sheet.get_all_records()))
+@st.cache_resource
+def get_google_client():
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    if "\\n" in creds_dict["private_key"]:
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    return gspread.Client(auth=creds)
 
 @st.cache_data(ttl=900)
 def get_registered_emails(target_sheet_id):
