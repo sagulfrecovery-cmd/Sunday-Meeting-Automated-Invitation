@@ -31,6 +31,7 @@ def format_time_arabic(hour, minute):
     h12 = 12 if h12 == 0 else h12
     return f"{h12}:{minute:02d} {period}"
 
+# دالة إعادة المحاولة عند حدوث ضغط لحظي (لمنع خطأ 429)
 def safe_execute(action_fn, max_retries=3, delay=1.5):
     for attempt in range(max_retries):
         try:
@@ -44,19 +45,16 @@ def safe_execute(action_fn, max_retries=3, delay=1.5):
 @st.cache_resource
 def get_google_client():
     creds_dict = dict(st.secrets["gcp_service_account"])
-    # هذا السطر يضمن تحويل أي شرطات مائلة لنزول سطر حقيقي
-    if "\\n" in creds_dict["private_key"]:
+    if "\\n" in creds_dict.get("private_key", ""):
         creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.Client(auth=creds)
 
-@st.cache_resource
-def get_google_client():
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    if "\\n" in creds_dict["private_key"]:
-        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    return gspread.Client(auth=creds)
+@st.cache_data(ttl=3600)
+def get_meetings_data():
+    client = get_google_client()
+    master_sheet = safe_execute(lambda: client.open_by_key(MASTER_SHEET_ID).sheet1)
+    return pd.DataFrame(safe_execute(lambda: master_sheet.get_all_records()))
 
 @st.cache_data(ttl=900)
 def get_registered_emails(target_sheet_id):
@@ -91,10 +89,10 @@ else:
     wed_open_time = dt_time(WED_OPEN_HOUR, WED_OPEN_MIN)
     wed_close_time = dt_time(WED_CLOSE_HOUR, WED_CLOSE_MIN)
 
-    if weekday == 6: 
+    if weekday == 6:
         if sun_open_time <= now_time <= sun_close_time:
             is_open = True
-    elif weekday == 2: 
+    elif weekday == 2:
         if wed_open_time <= now_time <= wed_close_time:
             is_open = True
 
@@ -172,21 +170,21 @@ if pledge:
                     meeting_info = meetings_data[meetings_data['Meeting Day'] == selected_meeting].iloc[0]
                     target_id = str(meeting_info['Target Sheet ID']).strip()
                     zoom_link = str(meeting_info['Zoom Link']).strip()
-                    
+
                     registered_emails = get_registered_emails(target_id)
 
                     if user_email in registered_emails:
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        # --- التسجيل المباشر عبر gspread ---
+
+                        # التسجيل المباشر في Google Sheets
                         client = get_google_client()
                         target_db = safe_execute(lambda: client.open_by_key(target_id))
-                        
+
                         try:
                             attendance_tab = safe_execute(lambda: target_db.worksheet("Attendance"))
                         except Exception:
                             attendance_tab = safe_execute(lambda: target_db.sheet1)
-                            
+
                         safe_execute(lambda: attendance_tab.append_row([baghdad_time, user_email]))
 
                         st.session_state['check_in_success'] = True
@@ -207,13 +205,13 @@ else:
 if st.session_state.get('check_in_success', False):
     st.markdown("---")
     st.success("✅ تم تسجيل حضورك بنجاح! شكراً لأمانتك.")
-    
+
     zoom_link = st.session_state['zoom_link']
     checked_in_email = st.session_state['checked_in_email']
     meeting_day = st.session_state['selected_meeting']
-    
+
     st.markdown("### 🔗 رابط زووم المباشر")
     st.markdown("**اضغط على أيقونة النسخ في الزاوية العلوية للصندوق لنسخ الرابط:**")
     st.code(zoom_link, language=None)
-    
+
     st.caption(f"تم التسجيل بالبريد: {checked_in_email} | الاجتماع: {meeting_day}")
