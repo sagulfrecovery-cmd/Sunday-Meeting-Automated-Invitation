@@ -44,6 +44,9 @@ def safe_execute(action_fn, max_retries=3, delay=1.5):
 @st.cache_resource
 def get_google_client():
     creds_dict = dict(st.secrets["gcp_service_account"])
+    # هذا السطر يضمن تحويل أي شرطات مائلة لنزول سطر حقيقي
+    if "\\n" in creds_dict["private_key"]:
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.Client(auth=creds)
 
