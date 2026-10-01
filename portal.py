@@ -4,7 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, time as dt_time
 import pytz
-import requests
+import time
 
 # --- CONFIGURATION ---
 MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
@@ -33,23 +33,34 @@ def format_time_arabic(hour, minute):
 
 @st.cache_resource
 def get_google_client():
-    # استخدام البيانات مباشرة كقاموس من إعدادات TOML
     creds_dict = dict(st.secrets["gcp_service_account"])
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.Client(auth=creds)
 
+# دالة مساعدة مع Retry لتفادي خطأ Quota 429
+def safe_execute(action_fn, max_retries=3, delay=1.5):
+    for attempt in range(max_retries):
+        try:
+            return action_fn()
+        except Exception as e:
+            if "429" in str(e) and attempt < max_retries - 1:
+                time.sleep(delay * (attempt + 1))
+                continue
+            raise e
+
 @st.cache_data(ttl=3600)
 def get_meetings_data():
     client = get_google_client()
-    master_sheet = client.open_by_key(MASTER_SHEET_ID).sheet1
-    return pd.DataFrame(master_sheet.get_all_records())
+    master_sheet = safe_execute(lambda: client.open_by_key(MASTER_SHEET_ID).sheet1)
+    return pd.DataFrame(safe_execute(lambda: master_sheet.get_all_records()))
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=1200)  # كاش لمدة 20 دقيقة لتفادي استهلاك Read Quota
 def get_registered_emails(target_sheet_id):
     client = get_google_client()
-    target_db = client.open_by_key(target_sheet_id)
-    reg_tab = target_db.worksheet("Registration")
-    reg_df = pd.DataFrame(reg_tab.get_all_records())
+    target_db = safe_execute(lambda: client.open_by_key(target_sheet_id))
+    reg_tab = safe_execute(lambda: target_db.worksheet("Registration"))
+    records = safe_execute(lambda: reg_tab.get_all_records())
+    reg_df = pd.DataFrame(records)
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
 
 # ==========================================
@@ -120,7 +131,7 @@ try:
     meetings_data = get_meetings_data()
     available_meetings = [str(x).strip() for x in meetings_data['Meeting Day'].tolist()]
 except Exception as e:
-    st.error(f"System Error: {e}")
+    st.error(f"خطأ أثناء جلب البيانات: {e}")
     st.stop()
 
 # التحديد التلقائي لليوم
@@ -152,7 +163,7 @@ if pledge:
         if not user_email:
             st.warning("يرجى إدخال البريد الإلكتروني.")
         else:
-            with st.spinner("جاري التحقق من السجلات..."):
+            with st.spinner("جاري التحقق من السجلات وتسجيل الحضور..."):
                 try:
                     meeting_info = meetings_data[meetings_data['Meeting Day'] == selected_meeting].iloc[0]
                     target_id = str(meeting_info['Target Sheet ID']).strip()
@@ -162,25 +173,25 @@ if pledge:
 
                     if user_email in registered_emails:
                         baghdad_time = datetime.now(pytz.timezone("Asia/Baghdad")).strftime("%Y-%m-%d %H:%M:%S")
-                        script_url = "https://script.google.com/macros/s/AKfycby4pH_ELy-H57Zan-xF34GCdbXVXRI8xEIRctbsM5EsZ5EFPPgbgY6Oxk1ZKZwV6JhbbQ/exec"
-
-                        payload = {
-                            "target_id": target_id,
-                            "timestamp": baghdad_time,
-                            "email": user_email
-                        }
-
-                        response = requests.post(script_url, data=payload)
-
-                        if response.text == "Success":
-                            st.session_state['check_in_success'] = True
-                            st.session_state['zoom_link'] = zoom_link
-                            st.session_state['checked_in_email']  = user_email
-                            st.session_state['selected_meeting'] = selected_meeting
+                        
+                        # --- التسجيل المباشر عبر gspread (العودة خطوة للوراء وإلغاء Apps Script) ---
+                        client = get_google_client()
+                        target_db = safe_execute(lambda: client.open_by_key(target_id))
+                        
+                        # افتراضياً يُسجل الحضور في الشيت الأول أو شيت Attendance
+                        try:
+                            attendance_tab = safe_execute(lambda: target_db.worksheet("Attendance"))
+                        except Exception:
+                            attendance_tab = safe_execute(lambda: target_db.sheet1)
                             
-                            st.rerun()
-                        else:
-                            st.error(f"حدث خطأ أثناء حفظ البيانات: {response.text}")
+                        # كتابة الصف مباشرة مع الحماية من التجاوز 429
+                        safe_execute(lambda: attendance_tab.append_row([baghdad_time, user_email]))
+
+                        st.session_state['check_in_success'] = True
+                        st.session_state['zoom_link'] = zoom_link
+                        st.session_state['checked_in_email'] = user_email
+                        st.session_state['selected_meeting'] = selected_meeting
+                        st.rerun()
                     else:
                         st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التأكد من البريد أو تقديم طلب انضمام.")
                 except Exception as e:
