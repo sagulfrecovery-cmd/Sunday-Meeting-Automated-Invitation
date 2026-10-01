@@ -136,19 +136,29 @@ except Exception as e:
     st.error(f"خطأ أثناء جلب البيانات: {e}")
     st.stop()
 
-# التحديد التلقائي لليوم
-if weekday == 6 or (is_testing and weekday not in [6, 2]):
-    selected_meeting = "الأحد"
-elif weekday == 2:
-    selected_meeting = "الأربعاء"
+# 🎯 تحديد يوم الاجتماع (تفاعلي في وضع الاختبار، وتلقائي في الوضع الفعلي)
+if is_testing:
+    selected_meeting = st.radio(
+        "🛠️ اختر الاجتماع الذي تريد اختباره الآن:",
+        options=["الأحد", "الأربعاء"],
+        horizontal=True
+    )
+    if st.session_state.get('last_tested_meeting') != selected_meeting:
+        st.session_state['last_tested_meeting'] = selected_meeting
+        st.session_state['check_in_success'] = False
 else:
-    selected_meeting = "الأحد"
+    if weekday == 6:
+        selected_meeting = "الأحد"
+    elif weekday == 2:
+        selected_meeting = "الأربعاء"
+    else:
+        selected_meeting = "الأحد"
 
 if selected_meeting not in available_meetings:
     st.error(f"⚠️ عذراً، لم يتم العثور على إعدادات اجتماع يوم **{selected_meeting}** في قاعدة البيانات.")
     st.stop()
 
-st.info(f"📌 اجتماع اليوم: **{selected_meeting}**")
+st.info(f"📌 الاجتماع المحدد: **{selected_meeting}**")
 st.markdown("<br>", unsafe_allow_html=True)
 user_email = st.text_input("البريد الإلكتروني المسجل (Registered Email):").strip().lower()
 
