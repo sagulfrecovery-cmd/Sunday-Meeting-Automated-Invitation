@@ -77,6 +77,33 @@ st.markdown("""
 # 🔧 Helper Functions & Caching
 # ==========================================
 
+# دالة قراءة الحضور اليومي مع كاش يتحدث كل 60 ثانية لحماية الـ API من الانهيار
+@st.cache_data(ttl=60)
+def get_todays_attendees(target_sheet_id, today_date_str):
+    try:
+        client = get_google_client()
+        target_db = safe_execute(lambda: client.open_by_key(target_sheet_id))
+        try:
+            attendance_tab = safe_execute(lambda: target_db.worksheet("Attendance"))
+        except Exception:
+            attendance_tab = safe_execute(lambda: target_db.sheet1)
+        
+        # قراءة كل السجلات
+        records = safe_execute(lambda: attendance_tab.get_all_values())
+        
+        attended_emails = set()
+        if records and len(records) > 1:
+            for row in records[1:]:
+                if len(row) >= 2:
+                    row_time = str(row[0]).strip()
+                    row_email = str(row[1]).strip().lower()
+                    # التأكد من أن الحضور تم اليوم
+                    if row_time.startswith(today_date_str):
+                        attended_emails.add(row_email)
+        return attended_emails
+    except Exception:
+        return set()
+
 def format_time_arabic(hour, minute):
     period = "مساءً" if hour >= 12 else "صباحاً"
     h12 = hour % 12
@@ -242,13 +269,24 @@ if pledge:
                     target_id = str(meeting_info['Target Sheet ID']).strip()
                     zoom_link = str(meeting_info['Zoom Link']).strip()
 
-                    # حالة 1: إعادة الدخول (Re-join)
+                    # حالة 1: إعادة الدخول (Re-join) بعد انتهاء فترة التسجيل
                     if gate_status == "REJOIN_ONLY":
-                        # الفحص السريع جداً (0 API calls)
-                        if user_email in st.session_state['today_attendees']:
+                        is_verified = False
+                        
+                        # الخطوة أ: فحص ذاكرة الجلسة الحالية (إذا لم يغلق المتصفح)
+                        if user_email in st.session_state.get('today_attendees', set()):
+                            is_verified = True
+                        else:
+                            # الخطوة ب: العضو أغلق المتصفح وعاد! نقرأ شيت الحضور من الكاش الآمن
+                            todays_attendees = get_todays_attendees(target_id, today_date_str)
+                            if user_email in todays_attendees:
+                                is_verified = True
+
+                        if is_verified:
                             st.session_state['check_in_success'] = True
                             st.session_state['zoom_link'] = zoom_link
                             st.session_state['is_rejoin'] = True
+                            st.session_state['today_attendees'].add(user_email) # تحديث الجلسة
                             st.rerun()
                         else:
                             st.error("❌ عذراً، لم نجد تسجيل حضور لك اليوم قبل إغلاق البوابة.")
@@ -266,13 +304,11 @@ if pledge:
                             live_emails = get_live_registered_emails(target_id)
                             if user_email in live_emails:
                                 is_registered = True
-                                get_cached_registered_emails.clear() # تحديث الكاش للمستقبل
+                                get_cached_registered_emails.clear() # تحديث الكاش
 
                         if is_registered:
-                            # إضافة العضو لذاكرة السيرفر اللحظية لتسريع العودة (Rejoin)
                             st.session_state['today_attendees'].add(user_email)
                             
-                            # تسجيل الحضور في Google Sheets
                             baghdad_time = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
                             client = get_google_client()
                             target_db = safe_execute(lambda: client.open_by_key(target_id))
@@ -281,8 +317,10 @@ if pledge:
                             except Exception:
                                 attendance_tab = safe_execute(lambda: target_db.sheet1)
                             
-                            # كتابة سطر في الشيت
                             safe_execute(lambda: attendance_tab.append_row([baghdad_time, user_email]))
+                            
+                            # مسح كاش الحضور ليتمكن من العودة لو انقطع اتصاله فورا
+                            get_todays_attendees.clear()
 
                             st.session_state['check_in_success'] = True
                             st.session_state['zoom_link'] = zoom_link
