@@ -14,7 +14,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # ⏰ إعدادات أوقات البوابة
 # ==========================================
 SUN_OPEN_HOUR, SUN_OPEN_MIN = 20, 45    # 8:45 PM
-SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 30  # 9:20 PM
+SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20  # 9:20 PM
 
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15    # 8:15 PM
 WED_CLOSE_HOUR, WED_CLOSE_MIN = 20, 50  # 8:50 PM
@@ -160,7 +160,7 @@ if selected_meeting not in available_meetings:
 
 st.info(f"📌 الاجتماع المحدد: **{selected_meeting}**")
 st.markdown("<br>", unsafe_allow_html=True)
-user_email = st.text_input("البريد الإلكتروني المسجل (Registered Email):").strip().lower()
+user_email = st.text_input("البريد الإلكتروني المسجل (Registered Email) - حجم الحروف يؤثر على التسجيل حيث يجب مطابقة الحروف الكبيرة والصغيرة التي استخدمتها في التسجيل:").strip().lower()
 
 # --- عهد التعافي ---
 st.markdown("---")
