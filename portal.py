@@ -18,12 +18,12 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # الأحد: يفتح 8:45 م | يقفل التسجيل الجديد 9:20 م | ينتهي الاجتماع (إعادة الدخول) 10:30 م
 SUN_OPEN_HOUR, SUN_OPEN_MIN = 20, 45
 SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20
-SUN_END_HOUR, SUN_END_MIN = 23, 50
+SUN_END_HOUR, SUN_END_MIN = 22, 30
 
 # الأربعاء: يفتح 8:15 م | يقفل التسجيل الجديد 8:50 م | ينتهي الاجتماع (إعادة الدخول) 10:15 م
 WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15
 WED_CLOSE_HOUR, WED_CLOSE_MIN = 20, 50
-WED_END_HOUR, WED_END_MIN = 23, 15
+WED_END_HOUR, WED_END_MIN = 22, 30
 
 ROOM_LOCK_MINUTES = 20
 
