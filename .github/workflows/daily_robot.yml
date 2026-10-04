@@ -3,7 +3,7 @@ name: Daily Fellowship Robot
 on:
   schedule:
     # يعمل الساعة 06:07 صباحاً UTC (09:07 ص بتوقيت بغداد) أيام الأحد، الاثنين، الأربعاء، والخميس.
-    - cron: '7 6 * * 0,1,3,4'
+    - cron: '13 6 * * 0,1,3,4'
   workflow_dispatch:
 
 jobs:
