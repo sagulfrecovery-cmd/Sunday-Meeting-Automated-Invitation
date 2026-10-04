@@ -160,7 +160,7 @@ if selected_meeting not in available_meetings:
 
 st.info(f"📌 الاجتماع المحدد: **{selected_meeting}**")
 st.markdown("<br>", unsafe_allow_html=True)
-user_email = st.text_input("البريد الإلكتروني المسجل (Registered Email) - حجم الحروف يؤثر على التسجيل حيث يجب مطابقة الحروف الكبيرة والصغيرة التي استخدمتها في التسجيل:").strip().lower()
+user_email = st.text_input("البريد الإلكتروني المسجل - حجم الحروف يؤثر على التسجيل حيث يجب مطابقة الحروف الكبيرة والصغيرة التي استخدمتها في التسجيل (Registered Email):").strip().lower()
 
 # --- عهد التعافي ---
 st.markdown("---")
