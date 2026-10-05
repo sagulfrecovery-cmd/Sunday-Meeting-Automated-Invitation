@@ -143,7 +143,12 @@ def run_maintenance(meetings_data):
             reg_records = reg_tab.get_all_records()
             
             try:
-                check_in_tab = target_db.worksheet("Check-In Log")
+                # التعديل الوحيد: قراءة شيت Attendance مع الاحتياط للشيت القديم
+                try:
+                    check_in_tab = target_db.worksheet("Attendance")
+                except:
+                    check_in_tab = target_db.worksheet("Check-In Log")
+                    
                 check_in_records = check_in_tab.get_all_records()
                 
                 ci_rows_to_delete = []
@@ -302,10 +307,8 @@ def run_robot():
                     <a href="{PORTAL_LINK}">{PORTAL_LINK}</a><br><br>
                     بـأنـتـظـار حضوركم !<br>نـحــن بـالـفــعـل نـتـعـافـى 🙏🏼</div>"""
                 
-                # التعديل هنا: إجبار الكود على وضع جميع الأعضاء في خانة TO لاجتماع الأحد
                 create_draft("اعلان اجتماع الخليج", body_html_sun, valid_emails, "TO", is_html=True)
                 
-# --- قسم اجتماع الأربعاء ---
             elif "Meetings" in worksheet_names:
                 print("🎨 استخدام قالب HTML (Meetings)...")
                 meeting_topic = "موضوع غير محدد"
@@ -317,13 +320,9 @@ def run_robot():
                             break
                 except: pass
 
-                # 1. Pull the UTC time from the Master Sheet (Fallback to 17:30 if empty)
                 utc_time_str = str(meeting_info.get('Meeting Time UTC', '17:30')).strip()
-                
-                # 2. Localize it as a UTC datetime object
                 utc_dt = pytz.utc.localize(datetime.strptime(today_str + f" {utc_time_str}:00", "%Y-%m-%d %H:%M:%S"))
                 
-                # 3. Generate the Time Zone list
                 tzs = [("Asia/Dubai", "Dubai", "دبي"), 
                        ("Asia/Baghdad", "Baghdad", "بغداد"), 
                        ("Africa/Cairo", "Cairo", "القاهرة"), 
@@ -332,7 +331,6 @@ def run_robot():
                 
                 dyn_time_html = "".join([f"{utc_dt.astimezone(pytz.timezone(tz[0])).strftime('%I:%M %p').upper().lstrip('0')} -- {tz[1]}/{tz[2]}<br>" for tz in tzs])
 
-                # 4. Inject into the HTML body
                 body_html = f"""<div dir="rtl" style="text-align: right; font-family: Arial; font-size: 16px; line-height: 1.6;">
                   ༺ يرجى قراءة الإعلان جيدًا ༻<br><br>
                   تدعوكم ༺ زمالة الخليج ༻ إلى اجتماع اليوم: <b>{meeting_topic}</b><br>
@@ -357,7 +355,7 @@ def run_robot():
         admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
             <h3>✅ تم تجهيز مسودات الدعوات بنجاح لاجتماع اليوم ({today_name})!</h3>
             <h4 style="color: #2e7d32;">📩 المستلمون للدعوة ({len(valid_emails)}):</h4><ul>{html_list(valid_emails)}</ul>
-            <h4 style="color: #f57c00;">⚠️ أعضاء تحت الإنذار ({len(warned_emails)}):</h4><ul>{html_list(warned_emails)}</ul>
+            <h4 style="color: #f57c00;">⚠️️ أعضاء تحت الإنذار ({len(warned_emails)}):</h4><ul>{html_list(warned_emails)}</ul>
             <h4 style="color: #c62828;">🚫 أعضاء متجاوزين الحد ({len(removed_emails)}):</h4><ul>{html_list(removed_emails)}</ul></div>"""
         send_admin_report(f"📊 تقرير دعوات زمالة الخليج - {today_str}", admin_body, admin_emails)
 
@@ -376,7 +374,12 @@ def run_robot():
         reg_df = pd.DataFrame(reg_tab.get_all_records())
         
         try:
-            check_in_tab = target_db.worksheet("Check-In Log")
+            # التعديل الوحيد: قراءة شيت Attendance مع الاحتياط للشيت القديم
+            try:
+                check_in_tab = target_db.worksheet("Attendance")
+            except:
+                check_in_tab = target_db.worksheet("Check-In Log")
+                
             check_in_df = pd.DataFrame(check_in_tab.get_all_records())
             raw_attendees = check_in_df[check_in_df['Timestamp'].astype(str).str.contains(yesterday_date_str, na=False)]['Email']
             yesterday_attendees = set(raw_attendees.str.lower().str.strip().tolist())
