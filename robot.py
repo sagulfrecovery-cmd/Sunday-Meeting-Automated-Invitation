@@ -64,17 +64,14 @@ def create_draft(subject, body, emails, invite_method, is_html=False, static_to=
     msg['Subject'] = subject
     msg['From'] = SENDER_EMAIL
     
-    # تحديد خانة TO إذا تم تمرير إيميل ثابت (مثل اجتماع الأربعاء)
     if static_to:
         msg['To'] = static_to
     
-    # توزيع إيميلات الأعضاء بناءً على الطريقة المطلوبة
     if invite_method.upper() == 'BCC':
         msg['Bcc'] = ", ".join(emails)
     elif invite_method.upper() == 'CC':
         msg['Cc'] = ", ".join(emails)
     elif invite_method.upper() == 'TO':
-        # إذا كان هناك إيميل ثابت مسبقاً في TO، نضيف إليه إيميلات الأعضاء، وإلا نضع إيميلات الأعضاء فقط في TO
         if static_to:
             msg['To'] = static_to + ", " + ", ".join(emails)
         else:
@@ -143,7 +140,6 @@ def run_maintenance(meetings_data):
             reg_records = reg_tab.get_all_records()
             
             try:
-                # التعديل الوحيد: قراءة شيت Attendance مع الاحتياط للشيت القديم
                 try:
                     check_in_tab = target_db.worksheet("Attendance")
                 except:
@@ -218,13 +214,16 @@ def run_robot():
     
     html_list = lambda lst: "".join([f"<li>{e}</li>" for e in sorted(lst)]) if lst else "<li>لا يوجد</li>"
     admin_emails = "ameermam.sa@gmail.com, keepcomingback.29@gmail.com, sagulf.recovery@gmail.com"
-    action_taken = False # <-- ADD THIS
+    
+    # المتغير المسؤول عن التأكد من أداء المهام
+    action_taken = False
 
     # ==========================================
     # 1. أيام الدعوات (الأحد والأربعاء)
     # ==========================================
     today_meeting = meetings_data[meetings_data['Meeting Day'] == today_name]
     if not today_meeting.empty:
+        action_taken = True
         print(f"📅 اليوم ({today_name}): يوم مخصص لإرسال دعوات الاجتماع.")
         
         print("🌐 جاري إرسال نبضة قوية لإيقاظ البوابة...")
@@ -269,7 +268,6 @@ def run_robot():
         if valid_emails:
             worksheet_names = [ws.title for ws in target_db.worksheets()]
             
-            # --- قسم اجتماع الأحد ---
             if "اجتماع اليوم" in worksheet_names:
                 print("📝 استخدام القالب الجديد HTML (اجتماع الأحد)...")
                 try:
@@ -356,19 +354,18 @@ def run_robot():
         admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
             <h3>✅ تم تجهيز مسودات الدعوات بنجاح لاجتماع اليوم ({today_name})!</h3>
             <h4 style="color: #2e7d32;">📩 المستلمون للدعوة ({len(valid_emails)}):</h4><ul>{html_list(valid_emails)}</ul>
-            <h4 style="color: #f57c00;">⚠️️ أعضاء تحت الإنذار ({len(warned_emails)}):</h4><ul>{html_list(warned_emails)}</ul>
+            <h4 style="color: #f57c00;">⚠ أعضاء تحت الإنذار ({len(warned_emails)}):</h4><ul>{html_list(warned_emails)}</ul>
             <h4 style="color: #c62828;">🚫 أعضاء متجاوزين الحد ({len(removed_emails)}):</h4><ul>{html_list(removed_emails)}</ul></div>"""
         send_admin_report(f"📊 تقرير دعوات زمالة الخليج - {today_str}", admin_body, admin_emails)
 
-   # ==========================================
+    # ==========================================
     # 2. أيام المتابعة والغيابات (الاثنين والخميس)
     # ==========================================
     yesterday_meeting = meetings_data[meetings_data['Meeting Day'] == yesterday_name]
     if not yesterday_meeting.empty:
-        action_taken = True # <-- ADD THIS
+        action_taken = True
         print(f"📅 اليوم مخصص لمتابعة غيابات اجتماع الأمس ({yesterday_name}).")
         
-        # 12 PM Lock REMOVED completely. It will run whenever triggered.
         meeting_info = yesterday_meeting.iloc[0]
         target_id = str(meeting_info['Target Sheet ID']).strip()
         max_abs = int(meeting_info['Max Absences'])
@@ -378,7 +375,6 @@ def run_robot():
         reg_df = pd.DataFrame(reg_tab.get_all_records())
         
         try:
-            # قراءة شيت الحضور
             try:
                 check_in_tab = target_db.worksheet("Attendance")
             except:
@@ -430,12 +426,12 @@ def run_robot():
 
         admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
             <h3>✅ تم فحص الحضور وتحديث ملف الإكسل لاجتماع الأمس ({yesterday_name})!</h3>
-            <h4 style="color: #1565c0;">⚠️️ تم تجهيز إيميلات تنبيه لمن غاب أمس ({len(absent_yesterday)}):</h4><ul>{html_list(absent_yesterday)}</ul>
+            <h4 style="color: #1565c0;">⚠️ تم تجهيز إيميلات تنبيه لمن غاب أمس ({len(absent_yesterday)}):</h4><ul>{html_list(absent_yesterday)}</ul>
             <h4 style="color: #c62828;">🚫 أعضاء متجاوزين الحد وتم شطبهم ({len(removed_emails)}):</h4><ul>{html_list(removed_emails)}</ul></div>"""
         send_admin_report(f"📊 تقرير المتابعة وتحديث الغيابات - {yesterday_name}", admin_body, admin_emails)
 
     # ==========================================
-    # 3. نبضة الحياة للأيام الفارغة (الثلاثاء، الجمعة، السبت)
+    # 3. نبضة الحياة للأيام الفارغة
     # ==========================================
     if not action_taken:
         print(f"💤 اليوم ({today_name}) لا توجد اجتماعات أو متابعات. إرسال إشعار العمل...")
@@ -448,3 +444,7 @@ def run_robot():
             <small style="color: gray;">هذه رسالة تلقائية للتأكد من أن الأتمتة تعمل يومياً.</small>
         </div>"""
         send_admin_report(f"🤖 نبضة الروبوت: أنا أعمل ({today_name})", heartbeat_body, admin_emails)
+
+# الأهم: هذا السطر هو الذي يقوم بتشغيل كامل الكود
+if __name__ == "__main__":
+    run_robot()
