@@ -3,7 +3,7 @@ name: Daily Fellowship Robot
 on:
   schedule:
     # تم تغيير الوقت بدقيقتين (إلى 06:15) لإجبار خوادم جيتهاب على إعادة تسجيل المهمة
-    - cron: '15 6 * * *'
+    - cron: '17 6 * * *'
   workflow_dispatch:
 
 jobs:
