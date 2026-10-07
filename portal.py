@@ -5,7 +5,6 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, time as dt_time
 import pytz
 import time
-import streamlit.components.v1 as components  # أضفنا هذه المكتبة للتوجيه الآمن
 
 # ==========================================
 # ⚙️ CONFIGURATION
@@ -423,13 +422,13 @@ if st.session_state.get('trap_stage_1_passed', False):
                 except Exception as e:
                     st.error(f"حدث خطأ أثناء الاتصال بقاعدة البيانات: {e}")
         
-        # كود التوجيه الآمن لـ Zoom مباشرة بعد الكتابة
-        components.html(
-            f"""
-            <script>
-                window.parent.location.href = "{zoom_link}";
-            </script>
-            """,
-            height=0,
-            width=0
-        )
+        # كود التوجيه الفوري لـ Zoom مباشرة بعد الكتابة
+        st.markdown(f"""
+        <meta http-equiv="refresh" content="0; url={zoom_link}">
+        <script>
+            window.top.location.href = "{zoom_link}";
+        </script>
+        """, unsafe_allow_html=True)
+        
+        # رسالة تظهر للحظات أثناء التحويل
+        st.info("⏳ جاري فتح قاعة Zoom، يرجى الانتظار...")
