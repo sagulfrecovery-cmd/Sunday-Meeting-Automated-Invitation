@@ -2,8 +2,8 @@ name: Daily Fellowship Robot
 
 on:
   schedule:
-    # يعمل الساعة 06:07 صباحاً UTC (09:07 ص بتوقيت بغداد) أيام الأحد، الاثنين، الأربعاء، والخميس.
-    - cron: '13 6 * * *'
+    # تم تغيير الوقت بدقيقتين (إلى 06:15) لإجبار خوادم جيتهاب على إعادة تسجيل المهمة
+    - cron: '15 6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,12 +12,13 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
+        cache: 'pip'
 
     - name: Install dependencies
       run: pip install -r requirements.txt
@@ -28,5 +29,3 @@ jobs:
         SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
         APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
       run: python robot.py
-
-        
