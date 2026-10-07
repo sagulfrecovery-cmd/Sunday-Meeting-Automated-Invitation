@@ -13,7 +13,7 @@ MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # ضع رابط التسجيل الخاص بيوم الأربعاء هنا
-WEDNESDAY_REGISTRATION_URL = "https://your-registration-link-here.com" 
+WEDNESDAY_REGISTRATION_URL = "https://docs.google.com/forms/d/e/1FAIpQLSftm8fJ-knqjrIiZCyYtHcSXgbIgN2hGP8xPU3WJJ1jSnwWhQ/viewform?usp=header" 
 
 # ==========================================
 # ⏰ إعدادات أوقات البوابة (توقيت بغداد)
