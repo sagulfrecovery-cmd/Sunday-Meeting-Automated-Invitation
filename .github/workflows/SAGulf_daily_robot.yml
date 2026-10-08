@@ -2,8 +2,8 @@ name: Daily Fellowship Robot
 
 on:
   schedule:
-    # تم تغيير الوقت بدقيقتين (إلى 06:15) لإجبار خوادم جيتهاب على إعادة تسجيل المهمة
-    - cron: '17 6 * * *'
+    # Runs at 06:17 UTC (09:17 AM Baghdad time) every day
+    - cron: '17 7 * * *'
   workflow_dispatch:
 
 jobs:
@@ -11,21 +11,23 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-        cache: 'pip'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
 
-    - name: Install dependencies
-      run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Run Daily Robot
-      env:
-        GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-        APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-      run: python robot.py
+      - name: Run Daily Robot
+        env:
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        run: python robot.py
