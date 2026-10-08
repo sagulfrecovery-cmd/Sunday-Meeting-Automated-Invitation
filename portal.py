@@ -12,7 +12,7 @@ import time
 MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# ضع رابط التسجيل الخاص بيوم الأربعاء هنا
+# رابط التسجيل الخاص بيوم الأربعاء
 WEDNESDAY_REGISTRATION_URL = "https://docs.google.com/forms/d/e/1FAIpQLSftm8fJ-knqjrIiZCyYtHcSXgbIgN2hGP8xPU3WJJ1jSnwWhQ/viewform?usp=header"
 
 # ==========================================
@@ -180,6 +180,16 @@ else:
 # 📖 العنوان الرئيسي ودليل الاستخدام 
 # ==========================================
 st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
+
+# إضافة التلميح التقني هنا (الإضافة الأولى)
+st.markdown("""
+<div style="background-color: #e8f4f8; border-right: 5px solid #17a2b8; padding: 15px; border-radius: 8px; margin-bottom: 20px; direction: rtl; text-align: right;">
+    <h4 style="color: #0c5460; margin-top: 0; margin-bottom: 10px;">💡 تلميح تقني لتجربة أفضل</h4>
+    <p style="color: #0c5460; font-size: 15px; margin: 0;">
+        إذا فتحت هذه البوابة مباشرة من داخل <b>تطبيق الإيميل</b> ولم يفتح معك (Zoom) عند الضغط على زر الدخول، نرجو الضغط على <b>النقاط الثلاث (⋮)</b> أو علامة البوصلة (🧭) بالأعلى، واختيار <b>"فتح في المتصفح" (Open in Chrome / Safari)</b>.
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 with st.expander("📖 دليل الاستخدام والقواعد التنظيمية الهامة (اضغط للقراءة)", expanded=False):
     st.markdown("""
@@ -432,3 +442,7 @@ if st.session_state.get('trap_stage_1_passed', False):
         
         # رسالة تظهر للحظات أثناء التحويل
         st.info("⏳ جاري فتح قاعة Zoom، يرجى الانتظار...")
+        
+        # الإضافة الثانية (طوق النجاة): تظهر مباشرة بعد رسالة الانتظار لتنقذ من تعطل متصفحهم
+        st.warning("⚠️ إذا لم يفتح تطبيق زووم تلقائياً الآن، اضغط على الزر أدناه:")
+        st.link_button("🔗 اضغط هنا لفتح قاعة Zoom يدوياً", zoom_link, use_container_width=True)
