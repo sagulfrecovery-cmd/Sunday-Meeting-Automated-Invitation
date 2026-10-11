@@ -1,9 +1,6 @@
 name: Daily Fellowship Robot
 
 on:
-  schedule:
-    # Runs at 00:17 UTC (3:17 AM Baghdad time) every day
-    - cron: '17 0 * * *'
   workflow_dispatch:
 
 jobs:
