@@ -15,6 +15,9 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # رابط التسجيل الخاص بيوم الأربعاء
 WEDNESDAY_REGISTRATION_URL = "https://docs.google.com/forms/d/e/1FAIpQLSftm8fJ-knqjrIiZCyYtHcSXgbIgN2hGP8xPU3WJJ1jSnwWhQ/viewform?usp=header"
 
+# 🕒 إعدادات مرآة الضمير (الحد الأدنى للدقائق المطلوبة)
+MIN_REQUIRED_MINUTES = 45  # يمكنك تغيير هذا الرقم متى شئت
+
 # ==========================================
 # ⏰ إعدادات أوقات البوابة (توقيت بغداد)
 # ==========================================
@@ -144,6 +147,27 @@ def get_live_registered_emails(target_sheet_id):
     reg_df = pd.DataFrame(records)
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
 
+# 🪞 إضافة دالة قراءة شيت دقائق زووم (مرآة الضمير)
+@st.cache_data(ttl=600)
+def get_zoom_durations(target_sheet_id):
+    try:
+        client = get_google_client()
+        target_db = safe_execute(lambda: client.open_by_key(target_sheet_id))
+        zoom_tab = safe_execute(lambda: target_db.worksheet("Zoom_Report"))
+        records = safe_execute(lambda: zoom_tab.get_all_records())
+        if not records: return {}
+        
+        df = pd.DataFrame(records)
+        df.columns = df.columns.astype(str).str.strip().str.lower()
+        
+        email_col = next((c for c in df.columns if 'email' in c or 'بريد' in c), df.columns[0])
+        duration_col = next((c for c in df.columns if 'duration' in c or 'دقائق' in c), df.columns[1])
+        
+        df[email_col] = df[email_col].astype(str).str.lower().str.strip()
+        return pd.Series(df[duration_col].values, index=df[email_col]).to_dict()
+    except Exception:
+        return {}
+
 # ==========================================
 # ⏰ تحديد حالة البوابة
 # ==========================================
@@ -181,7 +205,6 @@ else:
 # ==========================================
 st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
 
-# إضافة التلميح التقني هنا (الإضافة الأولى)
 st.markdown("""
 <div style="background-color: #e8f4f8; border-right: 5px solid #17a2b8; padding: 15px; border-radius: 8px; margin-bottom: 20px; direction: rtl; text-align: right;">
     <h4 style="color: #0c5460; margin-top: 0; margin-bottom: 10px;">💡 تلميح تقني لتجربة أفضل</h4>
@@ -298,21 +321,84 @@ if 'today_attendees' not in st.session_state:
     st.session_state['today_attendees'] = set()
 
 # ==========================================
-# 🎯 منطق التحقق (المرحلة الأولى - مصيدة التوثيق فقط)
+# 🎯 منطق التحقق (المرحلة الأولى - مصيدة التوثيق ومرآة الضمير)
 # ==========================================
-# يظهر هذا القسم فقط إذا لم يكمل المستخدم المرحلة الأولى
 if not st.session_state.get('trap_stage_1_passed', False):
     
+    can_proceed = False
+    btn_text = "تسجيل الحضور والدخول"
+
     if gate_status == "OPEN_NEW":
         st.markdown("---")
-        st.markdown("### 🤝 عهد التعافي")
-        pledge = st.checkbox("أتعهد بصدق وأمانة أمام نفسي وتجاه زمالتي، أنني أسجل الآن بنية الحضور الفعلي للاجتماع في وقته المحدد.")
-        btn_text = "تسجيل الحضور والدخول"
+        
+        # 🪞 جلب سجل الدقائق الخاص بهذا الإيميل بشكل ديناميكي من شيت (Zoom_Report)
+        user_duration = None
+        target_id = None
+        zoom_link = None
+        
+        if user_email:
+            try:
+                meeting_info = meetings_data[meetings_data['Meeting Day'] == selected_meeting].iloc[0]
+                target_id = str(meeting_info['Target Sheet ID']).strip()
+                zoom_link = str(meeting_info['Zoom Link']).strip()
+                durations_dict = get_zoom_durations(target_id)
+                
+                if user_email in durations_dict:
+                    # تحويل المدة إلى رقم صحيح وتجنب الأخطاء إذا كانت القيمة فارغة
+                    raw_duration = str(durations_dict[user_email]).strip()
+                    if raw_duration.isdigit():
+                        user_duration = int(raw_duration)
+            except Exception as e:
+                # صمت الأخطاء لكي لا يتعطل التطبيق إذا لم يكن الشيت موجوداً بعد
+                pass
+
+        # 🪞 تفعيل مرآة الضمير إذا كانت الدقائق أقل من الحد المطلوب (MIN_REQUIRED_MINUTES)
+        if user_duration is not None and user_duration < MIN_REQUIRED_MINUTES:
+            
+            # تحديد نوع التنبيه بناءً على دقائق البقاء
+            if user_duration == 0:
+                # رسالة المستخدم الشبح
+                warning_title = "🪞 رسالة ودية من النظام: أمانة الحضور"
+                warning_msg = f"""
+                مرحباً بك. تظهر سجلاتنا الآلية أنك قمت بضغط زر التسجيل في البوابة خلال الاجتماع الماضي، ولكنك <b>لم تتواجد في قاعة (Zoom) إطلاقاً (0 دقائق)</b>.<br>
+                نحن نثق بنوايا الأعضاء ولا نراقبهم، ولكن التسجيل دون الدخول يتعارض مع عهد التعافي. هل أنت مستعد اليوم للتواجد والمشاركة بشكل حقيقي؟
+                """
+            else:
+                # رسالة صاحب الدقائق القليلة
+                warning_title = "🪞 رسالة ودية من النظام: جودة الحضور"
+                warning_msg = f"""
+                مرحباً بك مجدداً. تظهر سجلاتنا الآلية أنك تواجدت في قاعة (Zoom) في الاجتماع الماضي لمدة <b>({user_duration}) دقائق فقط</b>.<br>
+                زمالة الخليج لا تضع حداً أدنى للدقائق ثقةً بضمير المجموعة، ولكننا نضع هذا الرقم أمامك بشفافية كتذكير ودي بعهد التعافي. هل أنت مستعد اليوم للتواجد والمشاركة بشكل حقيقي؟
+                """
+
+            st.markdown(f"""
+            <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; border-right: 5px solid #ffc107; text-align: right; direction: rtl; margin-bottom: 20px;">
+                <h4 style="color: #856404; margin-top: 0;">{warning_title}</h4>
+                <p style="color: #856404; font-size: 15px; margin-bottom: 5px; line-height: 1.6;">
+                {warning_msg}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # حقل الإدخال اليدوي بدلاً من مربع الصح
+            mirror_pledge = st.text_input("✍️ للإكمال، يرجى كتابة كلمة (مستعد) في المربع أدناه:")
+            if mirror_pledge.strip() == "مستعد":
+                can_proceed = True
+            else:
+                st.info("💡 بانتظار كتابة الكلمة لتفعيل زر الدخول.")
+                
+        # 🤝 واجهة التعهد الطبيعية لمن حضوره كامل أو العضو الجديد
+        else:
+            st.markdown("### 🤝 عهد التعافي")
+            pledge = st.checkbox("أتعهد بصدق وأمانة أمام نفسي وتجاه زمالتي، أنني أسجل الآن بنية الحضور الفعلي للاجتماع في وقته المحدد.")
+            can_proceed = pledge
+
     else:
-        pledge = True
+        can_proceed = True
         btn_text = "التحقق والعودة للاجتماع (Re-join)"
 
-    if pledge:
+    # زر التحقق (المرحلة الأولى)
+    if can_proceed:
         if st.button(btn_text, use_container_width=True):
             if not user_email:
                 st.warning("يرجى إدخال البريد الإلكتروني.")
@@ -333,7 +419,6 @@ if not st.session_state.get('trap_stage_1_passed', False):
                                     is_verified = True
 
                             if is_verified:
-                                # اجتياز المرحلة الأولى للإعادة
                                 st.session_state['trap_stage_1_passed'] = True
                                 st.session_state['zoom_link'] = zoom_link
                                 st.session_state['is_rejoin'] = True
@@ -354,7 +439,6 @@ if not st.session_state.get('trap_stage_1_passed', False):
                                     get_cached_registered_emails.clear()
 
                             if is_registered:
-                                # 🪤 الفخ هنا: لا نسجل اسمه في جوجل شيت! بل نمرره للمرحلة الثانية
                                 st.session_state['trap_stage_1_passed'] = True
                                 st.session_state['zoom_link'] = zoom_link
                                 st.session_state['is_rejoin'] = False
@@ -385,8 +469,9 @@ if not st.session_state.get('trap_stage_1_passed', False):
 
                     except Exception as e:
                         st.error(f"حدث خطأ: {e}")
-    else:
-        st.info("💡 يرجى وضع علامة (صح) على التعهد لتفعيل زر الدخول.")
+else:
+    if gate_status == "OPEN_NEW" and not can_proceed:
+        st.info("💡 يرجى إتمام إثبات النية لتفعيل زر الدخول.")
 
 # ==========================================
 # 🟢 زر الدخول المباشر (المرحلة الثانية - التسجيل الفعلي الخفي)
@@ -399,9 +484,9 @@ if st.session_state.get('trap_stage_1_passed', False):
     if st.session_state.get('is_rejoin', False):
         st.success("✅ مرحباً بعودتك! تم التحقق من تسجيلك المسبق.")
     else:
-        st.success("✅ تم تسجيل حضورك بنجاح!")
+        st.success("✅ تم التحقق من هويتك بنجاح!")
         
-    st.info("💡 اضغط على الزر أدناه للانتقال فوراً إلى قاعة (Zoom).")
+    st.info("💡 اضغط على الزر أدناه لتأكيد حضورك والانتقال فوراً إلى قاعة (Zoom).")
 
     # الزر البرمجي الذي يكتب البيانات في القاعدة، ثم يحوله
     if st.button("🚀 الدخول المباشر للاجتماع", use_container_width=True):
@@ -409,7 +494,7 @@ if st.session_state.get('trap_stage_1_passed', False):
         zoom_link = st.session_state['zoom_link']
         user_email_to_record = st.session_state['verified_email']
         
-        # --- التسجيل الفعلي في جوجل شيت يحدث هنا للملتزمين فقط ---
+        # --- التسجيل الفعلي في جوجل شيت يحدث هنا ---
         if not st.session_state.get('is_rejoin', False):
             with st.spinner("جاري تأكيد دخولك للقاعة..."):
                 try:
@@ -443,6 +528,6 @@ if st.session_state.get('trap_stage_1_passed', False):
         # رسالة تظهر للحظات أثناء التحويل
         st.info("⏳ جاري فتح قاعة Zoom، يرجى الانتظار...")
         
-        # الإضافة الثانية (طوق النجاة): تظهر مباشرة بعد رسالة الانتظار لتنقذ من تعطل متصفحهم
+        # الإضافة الثانية (طوق النجاة)
         st.warning("⚠️ إذا لم يفتح تطبيق زووم تلقائياً الآن، اضغط على الزر أدناه:")
         st.link_button("🔗 اضغط هنا لفتح قاعة Zoom يدوياً", zoom_link, use_container_width=True)
