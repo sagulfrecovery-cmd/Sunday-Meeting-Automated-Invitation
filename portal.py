@@ -186,7 +186,7 @@ st.markdown("""
 <div style="background-color: #e8f4f8; border-right: 5px solid #17a2b8; padding: 15px; border-radius: 8px; margin-bottom: 20px; direction: rtl; text-align: right;">
     <h4 style="color: #0c5460; margin-top: 0; margin-bottom: 10px;">💡 تلميح تقني لتجربة أفضل</h4>
     <p style="color: #0c5460; font-size: 15px; margin: 0;">
-        إذا فتحت هذه البوابة مباشرة من داخل <b>تطبيق الإيميل</b> ولم يفتح معك (Zoom) عند الضغط على زر الدخول، نرجو الضغط على <b>النقاط الثلاث (⋮)</b> أو علامة البوصلة (🧭) بالأعلى، واختيار <b>"فتح في المتصفح" (يرجى استخدام متصفح جوجل كروم لفتح البوابة)</b>.
+        إذا فتحت هذه البوابة مباشرة من داخل <b>تطبيق الإيميل</b> ولم يفتح معك (Zoom) عند الضغط على زر الدخول، نرجو الضغط على <b>النقاط الثلاث (⋮)</b> بالأعلى، واختيار <b>"فتح في المتصفح" (يرجى استخدام متصفح جوجل كروم لفتح البوابة)</b>.
     </p>
 </div>
 """, unsafe_allow_html=True)
