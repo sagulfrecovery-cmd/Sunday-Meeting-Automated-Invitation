@@ -1,10 +1,12 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timedelta
 import pytz
 import time
+import json
 
 # ==========================================
 # ⚙️ CONFIGURATION
@@ -27,6 +29,48 @@ WED_CLOSE_HOUR, WED_CLOSE_MIN = 20, 50
 WED_END_HOUR, WED_END_MIN = 22, 15
 
 ROOM_LOCK_MINUTES = 20
+
+# المدن المرجعية المعتمدة في البوابة
+REFERENCE_CITIES = [
+    {"name": "بغداد", "tz": "Asia/Baghdad", "flag": "🇮🇶"},
+    {"name": "الرياض", "tz": "Asia/Riyadh", "flag": "🇸🇦"},
+    {"name": "دبي", "tz": "Asia/Dubai", "flag": "🇦🇪"},
+    {"name": "القاهرة", "tz": "Africa/Cairo", "flag": "🇪🇬"},
+]
+
+# ترجمة أشهر المدن العربية والعالمية لعرض التوقيت المحلي للمستخدم بشكل واضح
+ARABIC_CITY_NAMES = {
+    "Asia/Baghdad": "بغداد (العراق)",
+    "Asia/Riyadh": "الرياض (السعودية)",
+    "Asia/Dubai": "دبي (الإمارات)",
+    "Africa/Cairo": "القاهرة (مصر)",
+    "Asia/Kuwait": "الكويت",
+    "Asia/Qatar": "الدوحة (قطر)",
+    "Asia/Bahrain": "المنامة (البحرين)",
+    "Asia/Muscat": "مسقط (عُمان)",
+    "Asia/Amman": "عمّان (الأردن)",
+    "Asia/Beirut": "بيروت (لبنان)",
+    "Asia/Damascus": "دمشق (سوريا)",
+    "Asia/Gaza": "غزة (فلسطين)",
+    "Asia/Hebron": "الخليل (فلسطين)",
+    "Asia/Jerusalem": "القدس",
+    "Asia/Aden": "عدن (اليمن)",
+    "Africa/Khartoum": "الخرطوم (السودان)",
+    "Africa/Tripoli": "طرابلس (ليبيا)",
+    "Africa/Tunis": "تونس",
+    "Africa/Algiers": "الجزائر",
+    "Africa/Casablanca": "الدار البيضاء (المغرب)",
+    "Europe/Istanbul": "إسطنبول (تركيا)",
+    "Europe/London": "لندن (بريطانيا)",
+    "Europe/Berlin": "برلين (ألمانيا)",
+    "Europe/Paris": "باريس (فرنسا)",
+    "Europe/Stockholm": "ستوكهولم (السويد)",
+    "America/New_York": "نيويورك (أمريكا)",
+    "America/Chicago": "شيكاغو (أمريكا)",
+    "America/Los_Angeles": "لوس أنجلوس (أمريكا)",
+    "America/Toronto": "تورونتو (كندا)",
+    "Australia/Sydney": "سيدني (أستراليا)",
+}
 
 # ==========================================
 # 🛡️ إعدادات واجهة المستخدم (حماية الرابط وتصميم الزر)
@@ -67,11 +111,55 @@ st.markdown("""
         background-color: #218838 !important; 
         transform: translateY(-2px) !important;
     }
+
+    /* 3. تنسيق جدول مواعيد البوابة المتجاوب */
+    .schedule-container {
+        direction: rtl;
+        text-align: right;
+        background-color: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .schedule-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 15px;
+    }
+    .schedule-table th {
+        background-color: #f1f5f9;
+        color: #1e293b;
+        padding: 10px;
+        border-bottom: 2px solid #cbd5e1;
+        text-align: right;
+    }
+    .schedule-table td {
+        padding: 10px;
+        border-bottom: 1px solid #e2e8f0;
+        color: #334155;
+    }
+    .highlight-row {
+        background-color: #f0fdf4 !important;
+        font-weight: bold;
+    }
+    .dst-badge {
+        display: inline-block;
+        background-color: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeeba;
+        border-radius: 6px;
+        padding: 2px 6px;
+        font-size: 12px;
+        margin-right: 6px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🔧 Helper Functions & Caching
+# 🔧 Helper Functions & Timezone Math
 # ==========================================
 
 def format_time_arabic(hour, minute):
@@ -79,6 +167,280 @@ def format_time_arabic(hour, minute):
     h12 = hour % 12
     h12 = 12 if h12 == 0 else h12
     return f"{h12}:{minute:02d} {period}"
+
+def get_next_meeting_window(now_baghdad, target_weekday, open_h, open_m, close_h, close_m, end_h, end_m):
+    """
+    حساب التاريخ الدقيق للاجتماع القادم بتوقيت بغداد، مما يضمن دقة التحويل
+    حسب التوقيت الصيفي أو الشتوي المطبق فعلياً في يوم الاجتماع القادم.
+    """
+    baghdad_tz = pytz.timezone("Asia/Baghdad")
+    days_ahead = (target_weekday - now_baghdad.weekday()) % 7
+    candidate_date = now_baghdad.date() + timedelta(days=days_ahead)
+
+    end_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(end_h, end_m)))
+    # إذا كان اليوم هو يوم الاجتماع ولكن الاجتماع انتهى، ننتقل للأسبوع القادم
+    if days_ahead == 0 and now_baghdad > end_dt:
+        candidate_date += timedelta(days=7)
+        end_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(end_h, end_m)))
+
+    open_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(open_h, open_m)))
+    close_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(close_h, close_m)))
+    return open_dt, close_dt, end_dt
+
+def convert_window_to_tz(open_dt, close_dt, now_baghdad, tz_name):
+    """
+    تحويل وقت فتح وإغلاق البوابة إلى المنطقة الزمنية المستهدفة في تاريخ الاجتماع تحديداً،
+    مع فحص ما إذا كان هناك تغيير في الساعة (صيفي/شتوي) بين اللحظة الحالية ويوم الاجتماع.
+    """
+    target_tz = pytz.timezone(tz_name)
+    now_in_target = now_baghdad.astimezone(target_tz)
+    open_in_target = open_dt.astimezone(target_tz)
+    close_in_target = close_dt.astimezone(target_tz)
+
+    # فحص تغير فرق التوقيت (DST) بين اليوم ويوم الاجتماع
+    dst_changed = now_in_target.utcoffset() != open_in_target.utcoffset()
+
+    open_str = format_time_arabic(open_in_target.hour, open_in_target.minute)
+    close_str = format_time_arabic(close_in_target.hour, close_in_target.minute)
+
+    # في حال تغير اليوم عند التحويل لدول بعيدة (مثل أمريكا أو أستراليا)
+    ARABIC_WEEKDAYS = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+    day_note = ""
+    if open_in_target.date() != open_dt.date():
+        day_note = f" ({ARABIC_WEEKDAYS[open_in_target.weekday()]})"
+
+    return {
+        "range_str": f"من {open_str} حتى {close_str}{day_note}",
+        "open_str": open_str,
+        "close_str": close_str,
+        "dst_changed": dst_changed,
+        "date_str": open_in_target.strftime("%Y-%m-%d"),
+    }
+
+def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_dt, next_meeting_label):
+    """
+    لوحة ساعات حية تعمل مباشرة في متصفح المستخدم بدون إعادة تحميل الصفحة (Zero Rerun)،
+    وتتعرف تلقائياً على مدينة المستخدم وتفحص التوقيت الصيفي/الشتوي ليوم الاجتماع.
+    """
+    payload = {
+        "sunOpenMs": int(sun_open_dt.timestamp() * 1000),
+        "sunCloseMs": int(sun_close_dt.timestamp() * 1000),
+        "wedOpenMs": int(wed_open_dt.timestamp() * 1000),
+        "wedCloseMs": int(wed_close_dt.timestamp() * 1000),
+        "nextMeetingLabel": next_meeting_label,
+        "cityMap": ARABIC_CITY_NAMES,
+    }
+    payload_json = json.dumps(payload, ensure_ascii=False)
+
+    html_code = f"""
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+    <meta charset="UTF-8">
+    <style>
+        * {{
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Cairo", sans-serif;
+            user-select: none;
+        }}
+        body {{
+            margin: 0;
+            padding: 2px;
+            background: transparent;
+            direction: rtl;
+        }}
+        .clocks-grid {{
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }}
+        @media (max-width: 640px) {{
+            .clocks-grid {{
+                grid-template-columns: repeat(2, 1fr);
+            }}
+        }}
+        .clock-card {{
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 10px 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        }}
+        .city-title {{
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+            margin-bottom: 4px;
+        }}
+        .city-time {{
+            font-size: 17px;
+            font-weight: 800;
+            color: #0f766e;
+            letter-spacing: 0.3px;
+        }}
+        .local-banner {{
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 1px solid #86efac;
+            border-right: 5px solid #16a34a;
+            border-radius: 10px;
+            padding: 12px 15px;
+            color: #14532d;
+            font-size: 14.5px;
+            line-height: 1.6;
+        }}
+        .local-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 6px;
+            border-bottom: 1px dashed #86efac;
+            padding-bottom: 6px;
+        }}
+        .local-Schedule {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 6px;
+        }}
+        .dst-alert {{
+            margin-top: 8px;
+            background-color: #fffbeb;
+            border: 1px solid #fde68a;
+            border-right: 4px solid #f59e0b;
+            color: #92400e;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: none;
+        }}
+    </style>
+    </head>
+    <body>
+        <div class="clocks-grid">
+            <div class="clock-card">
+                <div class="city-title">🇮🇶 بغداد</div>
+                <div class="city-time" id="clk-baghdad">--:--:--</div>
+            </div>
+            <div class="clock-card">
+                <div class="city-title">🇸🇦 الرياض</div>
+                <div class="city-time" id="clk-riyadh">--:--:--</div>
+            </div>
+            <div class="clock-card">
+                <div class="city-title">🇦🇪 دبي</div>
+                <div class="city-time" id="clk-dubai">--:--:--</div>
+            </div>
+            <div class="clock-card">
+                <div class="city-title">🇪🇬 القاهرة</div>
+                <div class="city-time" id="clk-cairo">--:--:--</div>
+            </div>
+        </div>
+
+        <div class="local-banner">
+            <div class="local-header">
+                <div>📍 <b>توقيتك المحلي المكتشف:</b> <span id="user-city-name">جاري التحديد...</span></div>
+                <div>🕒 <b>الساعة لديك الآن:</b> <span id="clk-local" style="font-weight:800; color:#15803d;">--:--:--</span></div>
+            </div>
+            <div>
+                🗓️ <b>مواعيد فتح البوابة القادمة حسب توقيتك المحلي:</b>
+                <div class="local-Schedule">
+                    <span>🔹 <b>الأحد:</b> <span id="local-sun-time">--</span></span>
+                    <span>🔹 <b>الأربعاء:</b> <span id="local-wed-time">--</span></span>
+                </div>
+            </div>
+            <div class="dst-alert" id="local-dst-alert">
+                🔔 <b>تنبيه تغيير التوقيت:</b> ستشهد منطقتك الزمنية تغييراً في الساعة (التوقيت الصيفي/الشتوي) قبل موعد الاجتماع. الأوقات المعروضة أعلاه محسوبة ومحدّثة تلقائياً وفق التوقيت الجديد ليوم الاجتماع.
+            </div>
+        </div>
+
+        <script>
+            const DATA = {payload_json};
+            const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Baghdad";
+            const arabicCity = DATA.cityMap[userTz] || userTz;
+            document.getElementById("user-city-name").textContent = arabicCity + " (" + userTz + ")";
+
+            function formatArabicLiveClock(dateObj, tz) {{
+                const parts = new Intl.DateTimeFormat('en-US', {{
+                    timeZone: tz,
+                    hour12: false,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                }}).formatToParts(dateObj);
+                let h = 0, m = "00", s = "00";
+                for (const p of parts) {{
+                    if (p.type === 'hour') h = parseInt(p.value, 10);
+                    if (p.type === 'minute') m = p.value;
+                    if (p.type === 'second') s = p.value;
+                }}
+                if (h === 24) h = 0;
+                const period = h >= 12 ? "مساءً" : "صباحاً";
+                let h12 = h % 12;
+                if (h12 === 0) h12 = 12;
+                return h12 + ":" + m + ":" + s + " " + period;
+            }}
+
+            function formatArabicShortTime(ms, tz) {{
+                const d = new Date(ms);
+                const parts = new Intl.DateTimeFormat('en-US', {{
+                    timeZone: tz,
+                    hour12: false,
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }}).formatToParts(d);
+                let h = 0, m = "00";
+                for (const p of parts) {{
+                    if (p.type === 'hour') h = parseInt(p.value, 10);
+                    if (p.type === 'minute') m = p.value;
+                }}
+                if (h === 24) h = 0;
+                const period = h >= 12 ? "مساءً" : "صباحاً";
+                let h12 = h % 12;
+                if (h12 === 0) h12 = 12;
+                return h12 + ":" + m + " " + period;
+            }}
+
+            function getTzOffsetMinutes(dateObj, tz) {{
+                const utcDate = new Date(dateObj.toLocaleString('en-US', {{ timeZone: 'UTC' }}));
+                const tzDate = new Date(dateObj.toLocaleString('en-US', {{ timeZone: tz }}));
+                return Math.round((tzDate - utcDate) / 60000);
+            }}
+
+            function initStaticSchedules() {{
+                const sunStr = "من " + formatArabicShortTime(DATA.sunOpenMs, userTz) + " حتى " + formatArabicShortTime(DATA.sunCloseMs, userTz);
+                const wedStr = "من " + formatArabicShortTime(DATA.wedOpenMs, userTz) + " حتى " + formatArabicShortTime(DATA.wedCloseMs, userTz);
+                document.getElementById("local-sun-time").textContent = sunStr;
+                document.getElementById("local-wed-time").textContent = wedStr;
+
+                // فحص ما إذا كان هناك تغيير توقيت صيفي/شتوي بين الآن وموعد الاجتماع
+                const nowOffset = getTzOffsetMinutes(new Date(), userTz);
+                const sunOffset = getTzOffsetMinutes(new Date(DATA.sunOpenMs), userTz);
+                const wedOffset = getTzOffsetMinutes(new Date(DATA.wedOpenMs), userTz);
+                if (nowOffset !== sunOffset || nowOffset !== wedOffset) {{
+                    document.getElementById("local-dst-alert").style.display = "block";
+                }}
+            }}
+
+            function tickClocks() {{
+                const now = new Date();
+                document.getElementById("clk-baghdad").textContent = formatArabicLiveClock(now, "Asia/Baghdad");
+                document.getElementById("clk-riyadh").textContent = formatArabicLiveClock(now, "Asia/Riyadh");
+                document.getElementById("clk-dubai").textContent = formatArabicLiveClock(now, "Asia/Dubai");
+                document.getElementById("clk-cairo").textContent = formatArabicLiveClock(now, "Africa/Cairo");
+                document.getElementById("clk-local").textContent = formatArabicLiveClock(now, userTz);
+            }}
+
+            initStaticSchedules();
+            tickClocks();
+            setInterval(tickClocks, 1000);
+        </script>
+    </body>
+    </html>
+    """
+    components.html(html_code, height=215, scrolling=False)
 
 def safe_execute(action_fn, max_retries=3, delay=2.0):
     for attempt in range(max_retries):
@@ -145,13 +507,72 @@ def get_live_registered_emails(target_sheet_id):
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
 
 # ==========================================
-# ⏰ تحديد حالة البوابة
+# ⏰ تحديد حالة البوابة وحساب مواعيد الاجتماعات القادمة
 # ==========================================
 baghdad_tz = pytz.timezone("Asia/Baghdad")
 now = datetime.now(baghdad_tz)
 today_date_str = now.strftime("%Y-%m-%d")
 weekday = now.weekday()
 now_time = now.time()
+
+# حساب التواريخ الدقيقة للاجتماع القادم ليومي الأحد والأربعاء
+sun_open_dt, sun_close_dt, sun_end_dt = get_next_meeting_window(
+    now, 6, SUN_OPEN_HOUR, SUN_OPEN_MIN, SUN_CLOSE_HOUR, SUN_CLOSE_MIN, SUN_END_HOUR, SUN_END_MIN
+)
+wed_open_dt, wed_close_dt, wed_end_dt = get_next_meeting_window(
+    now, 2, WED_OPEN_HOUR, WED_OPEN_MIN, WED_CLOSE_HOUR, WED_CLOSE_MIN, WED_END_HOUR, WED_END_MIN
+)
+
+if sun_open_dt <= wed_open_dt:
+    next_meeting_day_name = "الأحد"
+    next_meeting_open_dt = sun_open_dt
+else:
+    next_meeting_day_name = "الأربعاء"
+    next_meeting_open_dt = wed_open_dt
+
+# بناء قائمة المدن للجدول (المدن الـ 4 الأساسية + مدينة المستخدم إذا كانت مختلفة)
+detected_user_tz = getattr(st.context, "timezone", None)
+cities_to_display = [dict(c, is_local=False) for c in REFERENCE_CITIES]
+
+if detected_user_tz:
+    existing_tzs = [c["tz"] for c in cities_to_display]
+    if detected_user_tz not in existing_tzs:
+        try:
+            pytz.timezone(detected_user_tz)
+            local_label = ARABIC_CITY_NAMES.get(detected_user_tz, detected_user_tz)
+            cities_to_display.insert(0, {
+                "name": f"توقيتك ({local_label})",
+                "tz": detected_user_tz,
+                "flag": "📍",
+                "is_local": True
+            })
+        except Exception:
+            pass
+    else:
+        for c in cities_to_display:
+            if c["tz"] == detected_user_tz:
+                c["is_local"] = True
+
+# حساب الجدول المحول لكل مدينة مع رصد التوقيت الصيفي/الشتوي
+schedule_rows = []
+any_dst_change_detected = False
+
+for city in cities_to_display:
+    sun_conv = convert_window_to_tz(sun_open_dt, sun_close_dt, now, city["tz"])
+    wed_conv = convert_window_to_tz(wed_open_dt, wed_close_dt, now, city["tz"])
+    city_has_dst_shift = sun_conv["dst_changed"] or wed_conv["dst_changed"]
+    if city_has_dst_shift:
+        any_dst_change_detected = True
+
+    schedule_rows.append({
+        "flag": city["flag"],
+        "name": city["name"],
+        "is_local": city.get("is_local", False),
+        "sun_range": sun_conv["range_str"],
+        "wed_range": wed_conv["range_str"],
+        "sun_dst": sun_conv["dst_changed"],
+        "wed_dst": wed_conv["dst_changed"],
+    })
 
 is_testing = st.secrets.get("test_mode", False)
 gate_status = "CLOSED" 
@@ -177,9 +598,14 @@ else:
             gate_status = "REJOIN_ONLY"
 
 # ==========================================
-# 📖 العنوان الرئيسي ودليل الاستخدام 
+# 📖 العنوان الرئيسي والساعات الحية ودليل الاستخدام 
 # ==========================================
 st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
+
+# 🕒 عرض الساعات الحية والتعرف التلقائي على توقيت المستخدم
+render_live_clocks_and_local_detector(
+    sun_open_dt, sun_close_dt, wed_open_dt, wed_close_dt, next_meeting_day_name
+)
 
 # إضافة التلميح التقني هنا (الإضافة الأولى)
 st.markdown("""
@@ -215,7 +641,7 @@ with st.expander("📖 دليل الاستخدام والقواعد التنظي
     نحن نثق بنوايا الجميع، ولكن نذكّر بأن التسجيل الوهمي هو استغلال لمرونة النظام وإخلال بـ "عهد التعافي". وننوه بشفافية أن استمرار استغلال هذا الأمر سيقودنا مستقبلاً إلى اتخاذ خطوات تنظيمية وتقنية تمنع هذا السلوك بشكل جذري. نرجو الحرص على التسجيل فقط عندما تكون مستعداً للدخول الفعلي، احتراماً للأمانة ولروح الزمالة.
     
     ### ⏰ أوقات البوابة (الالتزام بالوقت):
-    النظام مبرمج آلياً ولا يقبل الاستثناءات، احتراماً لوقت المجموعة *(المواعيد بتوقيت مكة المكرمة/بغداد)*:
+    النظام مبرمج آلياً ولا يقبل الاستثناءات، احتراماً لوقت المجموعة *(المواعيد الأساسية بتوقيت مكة المكرمة/بغداد، وتظهر محولة تلقائياً لمدينتك في جدول المواعيد)*:
     * **اجتماع الأحد:** يفتح التسجيل (8:45 م)، ويُغلق آلياً (9:20 م).
     * **اجتماع الأربعاء:** يفتح التسجيل (8:15 م)، ويُغلق آلياً (8:50 م).
     * **تنبيه حازم:** تُغلق القاعة تماماً من قبل المنسقين بعد 20 دقيقة من البداية. الدخول المبكر يعكس التزامنا الجاد بتعافينا.
@@ -239,19 +665,58 @@ with st.expander("📖 دليل الاستخدام والقواعد التنظي
     > **نشكر لكم التزامكم وأمانتكم.. نحن بالفعل نتعافى.**
     """)
 
-if gate_status == "CLOSED":
-    sun_open_str = format_time_arabic(SUN_OPEN_HOUR, SUN_OPEN_MIN)
-    sun_close_str = format_time_arabic(SUN_CLOSE_HOUR, SUN_CLOSE_MIN)
-    wed_open_str = format_time_arabic(WED_OPEN_HOUR, WED_OPEN_MIN)
-    wed_close_str = format_time_arabic(WED_CLOSE_HOUR, WED_CLOSE_MIN)
+# ==========================================
+# 📅 دالة عرض جدول مواعيد البوابة لمختلف المدن
+# ==========================================
+def render_dynamic_schedule_box(title_text):
+    rows_html = ""
+    for row in schedule_rows:
+        row_class = "highlight-row" if row["is_local"] else ""
+        local_tag = " <span style='color:#16a34a; font-size:12px;'>(مدينتك)</span>" if row["is_local"] else ""
+        sun_dst_badge = "<span class='dst-badge'>🔄 توقيت محدّث</span>" if row["sun_dst"] else ""
+        wed_dst_badge = "<span class='dst-badge'>🔄 توقيت محدّث</span>" if row["wed_dst"] else ""
 
+        rows_html += f"""
+        <tr class="{row_class}">
+            <td>{row['flag']} {row['name']}{local_tag}</td>
+            <td>{row['sun_range']} {sun_dst_badge}</td>
+            <td>{row['wed_range']} {wed_dst_badge}</td>
+        </tr>
+        """
+
+    dst_footer = ""
+    if any_dst_change_detected:
+        dst_footer = """
+        <div style="margin-top: 12px; background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 6px; font-size: 13.5px;">
+            🔔 <b>ملاحظة هامة حول التوقيت الصيفي/الشتوي:</b> بعض المدن الموضحة أعلاه ستشهد تغييراً في الساعة قبل موعد الاجتماع القادم. لقد قام النظام بحساب المواعيد أعلاه تلقائياً بناءً على التوقيت الجديد الساري في يوم الاجتماع.
+        </div>
+        """
+
+    st.markdown(f"""
+    <div class="schedule-container">
+        <h4 style="margin-top: 0; margin-bottom: 8px; color: #0f172a;">{title_text}</h4>
+        <p style="margin: 0 0 10px 0; font-size: 14.5px; color: #475569;">
+            📌 الاجتماع القادم هو اجتماع يوم <b>{next_meeting_day_name}</b> الموافق <b>{next_meeting_open_dt.strftime('%Y-%m-%d')}</b>:
+        </p>
+        <table class="schedule-table">
+            <thead>
+                <tr>
+                    <th>المدينة / المنطقة</th>
+                    <th>اجتماع الأحد ({sun_open_dt.strftime('%m/%d')})</th>
+                    <th>اجتماع الأربعاء ({wed_open_dt.strftime('%m/%d')})</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+        {dst_footer}
+    </div>
+    """, unsafe_allow_html=True)
+
+if gate_status == "CLOSED":
     st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
-    st.info(
-        f"يُفتح تسجيل الدخول فقط في أوقات الاجتماعات:\n\n"
-        f"- **الأحد:** من الساعة {sun_open_str} حتى {sun_close_str}\n"
-        f"- **الأربعاء:** من الساعة {wed_open_str} حتى {wed_close_str}\n"
-        f"*(بتوقيت بغداد)*"
-    )
+    render_dynamic_schedule_box("🕒 مواعيد فتح وإغلاق البوابة حسب المدن (محسوبة لتاريخ الاجتماع القادم):")
     st.stop()
 
 # ==========================================
@@ -271,6 +736,9 @@ else:
         </h3>
     </div>
     """, unsafe_allow_html=True)
+
+with st.expander("🕒 عرض جدول مواعيد البوابة حسب المدن (بغداد، الرياض، دبي، القاهرة، وتوقيتك المحلي)", expanded=False):
+    render_dynamic_schedule_box("مواعيد فتح وإغلاق البوابة:")
 
 try:
     meetings_data = get_meetings_data()
