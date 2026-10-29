@@ -676,43 +676,44 @@ def render_dynamic_schedule_box(title_text):
         sun_dst_badge = "<span class='dst-badge'>🔄 توقيت محدّث</span>" if row["sun_dst"] else ""
         wed_dst_badge = "<span class='dst-badge'>🔄 توقيت محدّث</span>" if row["wed_dst"] else ""
 
-        rows_html += f"""
-        <tr class="{row_class}">
-            <td>{row['flag']} {row['name']}{local_tag}</td>
-            <td>{row['sun_range']} {sun_dst_badge}</td>
-            <td>{row['wed_range']} {wed_dst_badge}</td>
-        </tr>
-        """
+        rows_html += (
+            f'<tr class="{row_class}">'
+            f"<td>{row['flag']} {row['name']}{local_tag}</td>"
+            f"<td>{row['sun_range']} {sun_dst_badge}</td>"
+            f"<td>{row['wed_range']} {wed_dst_badge}</td>"
+            f"</tr>"
+        )
 
     dst_footer = ""
     if any_dst_change_detected:
-        dst_footer = """
-        <div style="margin-top: 12px; background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 6px; font-size: 13.5px;">
-            🔔 <b>ملاحظة هامة حول التوقيت الصيفي/الشتوي:</b> بعض المدن الموضحة أعلاه ستشهد تغييراً في الساعة قبل موعد الاجتماع القادم. لقد قام النظام بحساب المواعيد أعلاه تلقائياً بناءً على التوقيت الجديد الساري في يوم الاجتماع.
-        </div>
-        """
+        dst_footer = (
+            '<div style="margin-top:12px;background-color:#fff3cd;color:#856404;'
+            'padding:10px;border-radius:6px;font-size:13.5px;">'
+            '🔔 <b>ملاحظة هامة حول التوقيت الصيفي/الشتوي:</b> بعض المدن الموضحة '
+            'أعلاه ستشهد تغييراً في الساعة قبل موعد الاجتماع القادم. لقد قام النظام '
+            'بحساب المواعيد أعلاه تلقائياً بناءً على التوقيت الجديد الساري في يوم الاجتماع.'
+            '</div>'
+        )
 
-    st.markdown(f"""
-    <div class="schedule-container">
-        <h4 style="margin-top: 0; margin-bottom: 8px; color: #0f172a;">{title_text}</h4>
-        <p style="margin: 0 0 10px 0; font-size: 14.5px; color: #475569;">
-            📌 الاجتماع القادم هو اجتماع يوم <b>{next_meeting_day_name}</b> الموافق <b>{next_meeting_open_dt.strftime('%Y-%m-%d')}</b>:
-        </p>
-        <table class="schedule-table">
-            <thead>
-                <tr>
-                    <th>المدينة / المنطقة</th>
-                    <th>اجتماع الأحد ({sun_open_dt.strftime('%m/%d')})</th>
-                    <th>اجتماع الأربعاء ({wed_open_dt.strftime('%m/%d')})</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows_html}
-            </tbody>
-        </table>
-        {dst_footer}
-    </div>
-    """, unsafe_allow_html=True)
+    html = (
+        '<div class="schedule-container">'
+        f'<h4 style="margin-top:0;margin-bottom:8px;color:#0f172a;">{title_text}</h4>'
+        '<p style="margin:0 0 10px 0;font-size:14.5px;color:#475569;">'
+        f'📌 الاجتماع القادم هو اجتماع يوم <b>{next_meeting_day_name}</b> '
+        f'الموافق <b>{next_meeting_open_dt.strftime("%Y-%m-%d")}</b>:'
+        '</p>'
+        '<table class="schedule-table">'
+        '<thead><tr>'
+        '<th>المدينة / المنطقة</th>'
+        f'<th>اجتماع الأحد ({sun_open_dt.strftime("%m/%d")})</th>'
+        f'<th>اجتماع الأربعاء ({wed_open_dt.strftime("%m/%d")})</th>'
+        '</tr></thead>'
+        f'<tbody>{rows_html}</tbody>'
+        '</table>'
+        f'{dst_footer}'
+        '</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
 
 if gate_status == "CLOSED":
     st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
