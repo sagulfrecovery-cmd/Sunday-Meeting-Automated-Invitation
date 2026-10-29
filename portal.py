@@ -669,50 +669,66 @@ with st.expander("📖 دليل الاستخدام والقواعد التنظي
 # 📅 دالة عرض جدول مواعيد البوابة لمختلف المدن
 # ==========================================
 def render_dynamic_schedule_box(title_text):
-    rows_html = ""
-    for row in schedule_rows:
-        row_class = "highlight-row" if row["is_local"] else ""
-        local_tag = " <span style='color:#16a34a; font-size:12px;'>(مدينتك)</span>" if row["is_local"] else ""
-        sun_dst_badge = "<span class='dst-badge'>🔄 توقيت محدّث</span>" if row["sun_dst"] else ""
-        wed_dst_badge = "<span class='dst-badge'>🔄 توقيت محدّث</span>" if row["wed_dst"] else ""
+     FLAG_URLS = {
+        "Asia/Baghdad": "https://flagcdn.com/w40/iq.png",
+        "Asia/Riyadh": "https://flagcdn.com/w40/sa.png",
+        "Asia/Dubai": "https://flagcdn.com/w40/ae.png",
+        "Africa/Cairo": "https://flagcdn.com/w40/eg.png",
+    }
 
-        rows_html += f"""
-        <tr class="{row_class}">
-            <td>{row['flag']} {row['name']}{local_tag}</td>
-            <td>{row['sun_range']} {sun_dst_badge}</td>
-            <td>{row['wed_range']} {wed_dst_badge}</td>
-        </tr>
-        """
+    rows_html = ""
+    for city, row in zip(cities_to_display, schedule_rows):
+        row_bg = "background-color: #f0fdf4; font-weight: 700;" if row["is_local"] else "background-color: #ffffff;"
+        local_tag = "<span style='background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:12px; font-size:11px; margin-right:6px;'>مدينتك</span>" if row["is_local"] else ""
+        
+        flag_url = FLAG_URLS.get(city["tz"])
+        if flag_url:
+            flag_html = f"<img src='{flag_url}' style='width:22px; height:15px; border-radius:3px; vertical-align:middle; margin-left:8px; box-shadow:0 1px 2px rgba(0,0,0,0.15);'>"
+        else:
+            flag_html = "<span style='margin-left:8px;'>📍</span>"
+
+        sun_dst = "<div style='color:#b45309; background:#fef3c7; display:inline-block; padding:1px 6px; border-radius:6px; font-size:11px; margin-top:4px;'>🔄 توقيت شتوي/صيفي محدّث</div>" if row["sun_dst"] else ""
+        wed_dst = "<div style='color:#b45309; background:#fef3c7; display:inline-block; padding:1px 6px; border-radius:6px; font-size:11px; margin-top:4px;'>🔄 توقيت شتوي/صيفي محدّث</div>" if row["wed_dst"] else ""
+
+        # ملاحظة: عدم ترك مسافات بادئة (Indentation) يمنع Streamlit من تحويل الكود إلى صندوق أسود
+        rows_html += (
+            f"<tr style='{row_bg} border-bottom: 1px solid #e2e8f0;'>"
+            f"<td style='padding:12px 10px; color:#1e293b; white-space:nowrap;'>{flag_html}<b>{row['name']}</b>{local_tag}</td>"
+            f"<td style='padding:12px 10px; color:#334155;'><div>{row['sun_range']}</div>{sun_dst}</td>"
+            f"<td style='padding:12px 10px; color:#334155;'><div>{row['wed_range']}</div>{wed_dst}</td>"
+            f"</tr>"
+        )
 
     dst_footer = ""
     if any_dst_change_detected:
-        dst_footer = """
-        <div style="margin-top: 12px; background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 6px; font-size: 13.5px;">
-            🔔 <b>ملاحظة هامة حول التوقيت الصيفي/الشتوي:</b> بعض المدن الموضحة أعلاه ستشهد تغييراً في الساعة قبل موعد الاجتماع القادم. لقد قام النظام بحساب المواعيد أعلاه تلقائياً بناءً على التوقيت الجديد الساري في يوم الاجتماع.
-        </div>
-        """
+        dst_footer = (
+            "<div style='margin-top:12px; background-color:#fffbeb; border:1px solid #fde68a; border-right:4px solid #f59e0b; color:#92400e; padding:10px 12px; border-radius:8px; font-size:13.5px;'>"
+            "🔔 <b>تنبيه التوقيت الصيفي/الشتوي:</b> بعض المدن الموضحة أعلاه تشهد تغييراً في الساعة قبل موعد الاجتماع القادم. تم حساب المواعيد أعلاه تلقائياً وفق التوقيت الجديد."
+            "</div>"
+        )
 
-    st.markdown(f"""
-    <div class="schedule-container">
-        <h4 style="margin-top: 0; margin-bottom: 8px; color: #0f172a;">{title_text}</h4>
-        <p style="margin: 0 0 10px 0; font-size: 14.5px; color: #475569;">
-            📌 الاجتماع القادم هو اجتماع يوم <b>{next_meeting_day_name}</b> الموافق <b>{next_meeting_open_dt.strftime('%Y-%m-%d')}</b>:
-        </p>
-        <table class="schedule-table">
-            <thead>
-                <tr>
-                    <th>المدينة / المنطقة</th>
-                    <th>اجتماع الأحد ({sun_open_dt.strftime('%m/%d')})</th>
-                    <th>اجتماع الأربعاء ({wed_open_dt.strftime('%m/%d')})</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows_html}
-            </tbody>
-        </table>
-        {dst_footer}
-    </div>
-    """, unsafe_allow_html=True)
+    full_html = (
+        f"<div style='direction:rtl; text-align:right; background:#ffffff; border:1px solid #cbd5e1; border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 4px 12px rgba(0,0,0,0.05);'>"
+        f"<h4 style='margin:0 0 8px 0; color:#0f172a; font-size:18px;'>{title_text}</h4>"
+        f"<div style='background:#f8fafc; border-right:4px solid #3b82f6; padding:8px 12px; border-radius:6px; margin-bottom:14px; font-size:14.5px; color:#334155;'>"
+        f"📌 الاجتماع القادم هو اجتماع يوم <b>{next_meeting_day_name}</b> الموافق <b>{next_meeting_open_dt.strftime('%Y-%m-%d')}</b>"
+        f"</div>"
+        f"<div style='overflow-x:auto;'>"
+        f"<table style='width:100%; border-collapse:collapse; font-size:14.5px; text-align:right;'>"
+        f"<thead>"
+        f"<tr style='background-color:#f1f5f9; color:#0f172a; border-bottom:2px solid #cbd5e1;'>"
+        f"<th style='padding:12px 10px;'>المدينة</th>"
+        f"<th style='padding:12px 10px;'>اجتماع الأحد ({sun_open_dt.strftime('%m/%d')})</th>"
+        f"<th style='padding:12px 10px;'>اجتماع الأربعاء ({wed_open_dt.strftime('%m/%d')})</th>"
+        f"</tr>"
+        f"</thead>"
+        f"<tbody>{rows_html}</tbody>"
+        f"</table>"
+        f"</div>"
+        f"{dst_footer}"
+        f"</div>"
+    )
+    st.markdown(full_html, unsafe_allow_html=True)
 
 if gate_status == "CLOSED":
     st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
