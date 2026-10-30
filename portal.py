@@ -38,16 +38,15 @@ REFERENCE_CITIES = [
     {"name": "القاهرة", "tz": "Africa/Cairo", "flag": "🇪🇬"},
 ]
 
-# ترجمة أشهر المدن العربية والعالمية
+# قاموس المدن المتاح في القائمة المنسدلة (مرتب ومنظم)
 ARABIC_CITY_NAMES = {
     "Asia/Baghdad": "بغداد (العراق)",
     "Asia/Riyadh": "الرياض (السعودية)",
     "Asia/Dubai": "دبي (الإمارات)",
-    "Africa/Cairo": "القاهرة (مصر)",
+    "Asia/Muscat": "مسقط (عُمان)",
     "Asia/Kuwait": "الكويت",
     "Asia/Qatar": "الدوحة (قطر)",
     "Asia/Bahrain": "المنامة (البحرين)",
-    "Asia/Muscat": "مسقط (عُمان)",
     "Asia/Amman": "عمّان (الأردن)",
     "Asia/Beirut": "بيروت (لبنان)",
     "Asia/Damascus": "دمشق (سوريا)",
@@ -55,6 +54,7 @@ ARABIC_CITY_NAMES = {
     "Asia/Hebron": "الخليل (فلسطين)",
     "Asia/Jerusalem": "القدس",
     "Asia/Aden": "عدن (اليمن)",
+    "Africa/Cairo": "القاهرة (مصر)",
     "Africa/Khartoum": "الخرطوم (السودان)",
     "Africa/Tripoli": "طرابلس (ليبيا)",
     "Africa/Tunis": "تونس",
@@ -62,7 +62,14 @@ ARABIC_CITY_NAMES = {
     "Africa/Casablanca": "الدار البيضاء (المغرب)",
     "Europe/Istanbul": "إسطنبول (تركيا)",
     "Europe/London": "لندن (بريطانيا)",
-    "America/New_York": "نيويورك (أمريكا)",
+    "Europe/Berlin": "برلين (ألمانيا)",
+    "Europe/Paris": "باريس (فرنسا)",
+    "Europe/Stockholm": "ستوكهولم (السويد)",
+    "America/New_York": "نيويورك (الساحل الشرقي لأمريكا)",
+    "America/Chicago": "شيكاغو (وسط أمريكا)",
+    "America/Los_Angeles": "لوس أنجلوس (الساحل الغربي)",
+    "America/Toronto": "تورونتو (كندا)",
+    "Australia/Sydney": "سيدني (أستراليا)",
 }
 
 # ==========================================
@@ -105,14 +112,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🔧 Helper Functions & Timezone Math
+# 🔧 Helper Functions
 # ==========================================
-
-def format_time_arabic(hour, minute):
-    period = "مساءً" if hour >= 12 else "صباحاً"
-    h12 = hour % 12
-    h12 = 12 if h12 == 0 else h12
-    return f"{h12}:{minute:02d} {period}"
 
 def get_next_meeting_window(now_baghdad, target_weekday, open_h, open_m, close_h, close_m, end_h, end_m):
     baghdad_tz = pytz.timezone("Asia/Baghdad")
@@ -127,23 +128,6 @@ def get_next_meeting_window(now_baghdad, target_weekday, open_h, open_m, close_h
     open_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(open_h, open_m)))
     close_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(close_h, close_m)))
     return open_dt, close_dt, end_dt
-
-def convert_window_to_tz(open_dt, close_dt, now_baghdad, tz_name):
-    target_tz = pytz.timezone(tz_name)
-    now_in_target = now_baghdad.astimezone(target_tz)
-    open_in_target = open_dt.astimezone(target_tz)
-    close_in_target = close_dt.astimezone(target_tz)
-
-    dst_changed = now_in_target.utcoffset() != open_in_target.utcoffset()
-    open_str = format_time_arabic(open_in_target.hour, open_in_target.minute)
-    close_str = format_time_arabic(close_in_target.hour, close_in_target.minute)
-
-    return {
-        "range_str": f"من {open_str} حتى {close_str}",
-        "open_str": open_str,
-        "close_str": close_str,
-        "dst_changed": dst_changed,
-    }
 
 def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_dt, next_meeting_label, next_meeting_dt, gate_status):
     payload = {
@@ -195,146 +179,81 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
             height: auto;
         }}
         .hero-top {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            border-bottom: 1px solid #334155;
-            padding-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #334155; padding-bottom: 10px;
         }}
-        .hero-title {{
-            font-size: 18px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }}
+        .hero-title {{ font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; }}
         .status-badge {{
-            font-size: 13px;
-            font-weight: 700;
-            padding: 4px 10px;
-            border-radius: 20px;
-            background-color: #ef4444; 
-            color: white;
+            font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 20px;
+            background-color: #ef4444; color: white;
         }}
-        .status-badge.open {{
-            background-color: #22c55e;
-            animation: pulse 2s infinite;
-        }}
-        .status-badge.rejoin {{
-            background-color: #3b82f6; 
-        }}
+        .status-badge.open {{ background-color: #22c55e; animation: pulse 2s infinite; }}
+        .status-badge.rejoin {{ background-color: #3b82f6; }}
         @keyframes pulse {{
             0% {{ box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }}
             70% {{ box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }}
             100% {{ box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }}
         }}
         
-        .hero-main {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-        }}
-        .local-time-box {{
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }}
-        .local-time-label {{
-            font-size: 13px;
-            color: #94a3b8;
-        }}
-        .local-time-value {{
-            font-size: 26px;
-            font-weight: 800;
-            color: #f8fafc;
-            letter-spacing: 0.5px;
-        }}
-        .local-city-label {{
-            font-size: 14px;
-            color: #38bdf8;
-            font-weight: 600;
-        }}
-        .schedule-info-box {{
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            text-align: left;
-        }}
-        .schedule-info-label {{
-            font-size: 13px;
-            color: #94a3b8;
-        }}
-        .schedule-info-value {{
-            font-size: 16px;
-            font-weight: 600;
-            color: #f8fafc;
-        }}
+        .hero-main {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }}
+        .local-time-box {{ display: flex; flex-direction: column; gap: 4px; }}
+        .local-time-label {{ font-size: 13px; color: #94a3b8; }}
+        .local-time-value {{ font-size: 26px; font-weight: 800; color: #f8fafc; letter-spacing: 0.5px; }}
+        .local-city-label {{ font-size: 14px; color: #38bdf8; font-weight: 600; }}
+        .schedule-info-box {{ display: flex; flex-direction: column; gap: 4px; text-align: left; }}
+        .schedule-info-label {{ font-size: 13px; color: #94a3b8; }}
+        .schedule-info-value {{ font-size: 16px; font-weight: 600; color: #f8fafc; }}
 
         /* Clocks Grid */
-        .clocks-grid {{
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            margin-bottom: 15px;
-        }}
+        .clocks-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }}
         .clock-card {{
-            background: #f8fafc;
-            border: 1px solid #cbd5e1;
-            border-radius: 10px;
-            padding: 8px 6px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px;
+            padding: 8px 6px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.04);
         }}
-        .city-title {{
-            font-size: 13px;
-            font-weight: 700;
-            color: #334155;
-            margin-bottom: 2px;
+        .city-title {{ font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 2px; }}
+        .city-time {{ font-size: 15px; font-weight: 800; color: #0f766e; letter-spacing: 0.3px; }}
+
+        /* Custom Selector Section */
+        .custom-selector-container {{
+            background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;
+            padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }}
-        .city-time {{
-            font-size: 15px;
-            font-weight: 800;
-            color: #0f766e;
-            letter-spacing: 0.3px;
+        .select-label {{ font-size: 14.5px; font-weight: 700; color: #0f172a; margin-bottom: 8px; display: block; }}
+        .city-select {{
+            width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;
+            font-size: 15px; background-color: #f8fafc; color: #1e293b; outline: none; cursor: pointer;
         }}
+        .city-select:focus {{ border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }}
+        
+        .custom-result-card {{
+            margin-top: 12px; background: #f0fdf4; border: 1px solid #bbf7d0;
+            border-right: 4px solid #22c55e; border-radius: 8px; padding: 12px 15px; display: none;
+        }}
+        .custom-card-header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #bbf7d0; padding-bottom: 8px; margin-bottom: 8px; }}
+        .custom-card-title {{ font-weight: 700; color: #166534; font-size: 15px; }}
+        .custom-card-time {{ font-weight: 800; color: #15803d; font-size: 16px; direction: ltr; }}
+        .custom-schedule-row {{ font-size: 14px; color: #14532d; margin-bottom: 4px; }}
+        .custom-schedule-row b {{ color: #166534; }}
 
         @media (max-width: 640px) {{
-            .clocks-grid {{
-                grid-template-columns: repeat(2, 1fr);
-            }}
-            .hero-main {{
-                flex-direction: column;
-                align-items: flex-start;
-            }}
-            .schedule-info-box {{
-                text-align: right;
-            }}
+            .clocks-grid {{ grid-template-columns: repeat(2, 1fr); }}
+            .hero-main {{ flex-direction: column; align-items: flex-start; }}
+            .schedule-info-box {{ text-align: right; }}
+            .custom-card-header {{ flex-direction: column; align-items: flex-start; gap: 5px; }}
         }}
 
         /* DST Alert */
         .dst-alert {{
-            margin-top: 5px;
-            background-color: #fffbeb;
-            border: 1px solid #fde68a;
-            border-right: 4px solid #f59e0b;
-            color: #92400e;
-            padding: 8px 10px;
-            border-radius: 6px;
-            font-size: 13px;
-            display: none;
+            margin-top: 8px; background-color: #fffbeb; border: 1px solid #fde68a;
+            border-right: 4px solid #f59e0b; color: #92400e; padding: 8px 10px;
+            border-radius: 6px; font-size: 13px; display: none;
         }}
     </style>
     </head>
     <body>
         <div class="hero-card">
             <div class="hero-top">
-                <div class="hero-title">
-                    📅 الاجتماع القادم: يوم {next_meeting_label} ({next_meeting_date_str})
-                </div>
+                <div class="hero-title">📅 الاجتماع القادم: يوم {next_meeting_label} ({next_meeting_date_str})</div>
                 <div id="gate-status-badge" class="status-badge">⛔ مغلق</div>
             </div>
             <div class="hero-main">
@@ -352,26 +271,33 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
         </div>
 
         <div class="clocks-grid">
-            <div class="clock-card">
-                <div class="city-title">🇮🇶 بغداد</div>
-                <div class="city-time" id="clk-baghdad">--:--:--</div>
-            </div>
-            <div class="clock-card">
-                <div class="city-title">🇸🇦 الرياض</div>
-                <div class="city-time" id="clk-riyadh">--:--:--</div>
-            </div>
-            <div class="clock-card">
-                <div class="city-title">🇦🇪 دبي</div>
-                <div class="city-time" id="clk-dubai">--:--:--</div>
-            </div>
-            <div class="clock-card">
-                <div class="city-title">🇪🇬 القاهرة</div>
-                <div class="city-time" id="clk-cairo">--:--:--</div>
+            <div class="clock-card"><div class="city-title">🇮🇶 بغداد</div><div class="city-time" id="clk-baghdad">--:--:--</div></div>
+            <div class="clock-card"><div class="city-title">🇸🇦 الرياض</div><div class="city-time" id="clk-riyadh">--:--:--</div></div>
+            <div class="clock-card"><div class="city-title">🇦🇪 دبي</div><div class="city-time" id="clk-dubai">--:--:--</div></div>
+            <div class="clock-card"><div class="city-title">🇪🇬 القاهرة</div><div class="city-time" id="clk-cairo">--:--:--</div></div>
+        </div>
+
+        <div class="custom-selector-container">
+            <label class="select-label" for="custom-city-select">🌍 ابحث عن مواعيد البوابة في أي مدينة أخرى:</label>
+            <select id="custom-city-select" class="city-select" onchange="updateCustomCityCard()">
+                <option value="">-- اختر المدينة / المنطقة --</option>
+            </select>
+            
+            <div id="custom-result-card" class="custom-result-card">
+                <div class="custom-card-header">
+                    <div class="custom-card-title" id="custom-card-title-text">المدينة</div>
+                    <div class="custom-card-time" id="clk-custom">--:--:--</div>
+                </div>
+                <div class="custom-schedule-row">🔹 <b>الأحد:</b> <span id="custom-sun-times">--</span></div>
+                <div class="custom-schedule-row">🔹 <b>الأربعاء:</b> <span id="custom-wed-times">--</span></div>
+                <div class="dst-alert" id="custom-dst-alert">
+                    🔔 <b>تنبيه:</b> ستشهد هذه المدينة تغييراً في الساعة (التوقيت الصيفي/الشتوي) قبل موعد الاجتماع، وتم احتساب المواعيد أعلاه وفق التوقيت الجديد.
+                </div>
             </div>
         </div>
 
-        <div class="dst-alert" id="local-dst-alert">
-            🔔 <b>تنبيه تغيير التوقيت:</b> ستشهد منطقتك الزمنية تغييراً في الساعة (التوقيت الصيفي/الشتوي) قبل موعد الاجتماع. الأوقات المعروضة أعلاه محسوبة ومحدّثة تلقائياً وفق التوقيت الجديد.
+        <div class="dst-alert" id="local-dst-alert" style="margin-bottom:10px;">
+            🔔 <b>تنبيه (موقعك الحالي):</b> ستشهد منطقتك الزمنية تغييراً في التوقيت الصيفي/الشتوي قبل الاجتماع. المواعيد بالأعلى محدّثة تلقائياً ليوم الاجتماع.
         </div>
 
         <script>
@@ -379,6 +305,15 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
             const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Baghdad";
             const arabicCity = DATA.cityMap[userTz] || userTz;
             document.getElementById("user-city-name").textContent = "📍 " + arabicCity + " (" + userTz + ")";
+
+            // Populate the Dropdown
+            const selectEl = document.getElementById("custom-city-select");
+            for (const [tz, name] of Object.entries(DATA.cityMap)) {{
+                const opt = document.createElement("option");
+                opt.value = tz;
+                opt.textContent = name;
+                selectEl.appendChild(opt);
+            }}
 
             function formatArabicLiveClock(dateObj, tz) {{
                 const parts = new Intl.DateTimeFormat('en-US', {{
@@ -420,6 +355,41 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
                 return Math.round((tzDate - utcDate) / 60000);
             }}
 
+            function updateCustomCityCard() {{
+                const selectedTz = selectEl.value;
+                const card = document.getElementById("custom-result-card");
+                const alertDiv = document.getElementById("custom-dst-alert");
+                
+                if (!selectedTz) {{
+                    card.style.display = "none";
+                    return;
+                }}
+                
+                card.style.display = "block";
+                document.getElementById("custom-card-title-text").textContent = "📍 " + DATA.cityMap[selectedTz];
+                
+                // Calculate Sun and Wed times
+                const sunRange = "من " + formatArabicShortTime(DATA.sunOpenMs, selectedTz) + " حتى " + formatArabicShortTime(DATA.sunCloseMs, selectedTz);
+                const wedRange = "من " + formatArabicShortTime(DATA.wedOpenMs, selectedTz) + " حتى " + formatArabicShortTime(DATA.wedCloseMs, selectedTz);
+                
+                document.getElementById("custom-sun-times").textContent = sunRange;
+                document.getElementById("custom-wed-times").textContent = wedRange;
+
+                // Check DST for custom city
+                const nowOffset = getTzOffsetMinutes(new Date(), selectedTz);
+                const sunOffset = getTzOffsetMinutes(new Date(DATA.sunOpenMs), selectedTz);
+                const wedOffset = getTzOffsetMinutes(new Date(DATA.wedOpenMs), selectedTz);
+                
+                if (nowOffset !== sunOffset || nowOffset !== wedOffset) {{
+                    alertDiv.style.display = "block";
+                }} else {{
+                    alertDiv.style.display = "none";
+                }}
+                
+                // Immediate clock update
+                document.getElementById("clk-custom").textContent = formatArabicLiveClock(new Date(), selectedTz);
+            }}
+
             function updateStatusBadge() {{
                 const badge = document.getElementById("gate-status-badge");
                 if (DATA.gateStatus === "OPEN_NEW") {{
@@ -456,6 +426,11 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
                 document.getElementById("clk-dubai").textContent = formatArabicLiveClock(now, "Asia/Dubai");
                 document.getElementById("clk-cairo").textContent = formatArabicLiveClock(now, "Africa/Cairo");
                 document.getElementById("clk-local").textContent = formatArabicLiveClock(now, userTz);
+                
+                const selectedTz = selectEl.value;
+                if (selectedTz) {{
+                    document.getElementById("clk-custom").textContent = formatArabicLiveClock(now, selectedTz);
+                }}
             }}
 
             updateStatusBadge();
@@ -466,8 +441,8 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
     </body>
     </html>
     """
-    # تعديل الارتفاع إلى 500 وتفعيل التمرير لحل مشكلة الاقتطاع في الجوال بشكل كامل
-    components.html(html_code, height=500, scrolling=True)
+    # زيادة الارتفاع ليتسع للقائمة المنسدلة والبطاقة المخصصة أسفلها بدون قص
+    components.html(html_code, height=650, scrolling=True)
 
 def safe_execute(action_fn, max_retries=3, delay=2.0):
     for attempt in range(max_retries):
