@@ -234,6 +234,9 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
     }
     payload_json = json.dumps(payload, ensure_ascii=False)
 
+    # نستخدم المتغيرات الأصلية (وليست الـ JSON string) داخل قالب HTML
+    next_meeting_date_str = next_meeting_dt.strftime("%Y-%m-%d")
+
     html_code = f"""
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
@@ -410,7 +413,7 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
         <div class="hero-card">
             <div class="hero-top">
                 <div class="hero-title">
-                    📅 الاجتماع القادم: يوم {payload_json['nextMeetingLabel']} ({payload_json['nextMeetingDate']})
+                    📅 الاجتماع القادم: يوم {next_meeting_label} ({next_meeting_date_str})
                 </div>
                 <div id="gate-status-badge" class="status-badge">⛔ مغلق</div>
             </div>
