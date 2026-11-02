@@ -1,726 +1,3 @@
-import streamlit as st
-import streamlit.components.v1 as components
-import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
-from datetime import datetime, time as dt_time, timedelta
-import pytz
-import time
-import json
-
-# ==========================================
-# ⚙️ CONFIGURATION
-# ==========================================
-MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-
-# رابط التسجيل الخاص بيوم الأربعاء
-WEDNESDAY_REGISTRATION_URL = "https://docs.google.com/forms/d/e/1FAIpQLSftm8fJ-knqjrIiZCyYtHcSXgbIgN2hGP8xPU3WJJ1jSnwWhQ/viewform?usp=header"
-
-# ==========================================
-# ⏰ إعدادات أوقات البوابة (توقيت بغداد)
-# ==========================================
-SUN_OPEN_HOUR, SUN_OPEN_MIN = 20, 45
-SUN_CLOSE_HOUR, SUN_CLOSE_MIN = 21, 20
-SUN_END_HOUR, SUN_END_MIN = 22, 30
-
-WED_OPEN_HOUR, WED_OPEN_MIN = 20, 15
-WED_CLOSE_HOUR, WED_CLOSE_MIN = 20, 50
-WED_END_HOUR, WED_END_MIN = 22, 15
-
-ROOM_LOCK_MINUTES = 20
-
-# المدن المرجعية المعتمدة في البوابة
-REFERENCE_CITIES = [
-    {"name": "بغداد", "tz": "Asia/Baghdad", "flag": "🇮🇶"},
-    {"name": "الرياض", "tz": "Asia/Riyadh", "flag": "🇸🇦"},
-    {"name": "دبي", "tz": "Asia/Dubai", "flag": "🇦🇪"},
-    {"name": "القاهرة", "tz": "Africa/Cairo", "flag": "🇪🇬"},
-]
-
-# قاموس المدن المتاح في القائمة المنسدلة
-ARABIC_CITY_NAMES = {
-    "Asia/Baghdad": "بغداد (العراق)",
-    "Asia/Riyadh": "الرياض (السعودية)",
-    "Asia/Dubai": "دبي (الإمارات)",
-    "Asia/Muscat": "مسقط (عُمان)",
-    "Asia/Kuwait": "الكويت",
-    "Asia/Qatar": "الدوحة (قطر)",
-    "Asia/Bahrain": "المنامة (البحرين)",
-    "Asia/Amman": "عمّان (الأردن)",
-    "Asia/Beirut": "بيروت (لبنان)",
-    "Asia/Damascus": "دمشق (سوريا)",
-    "Asia/Gaza": "غزة (فلسطين)",
-    "Asia/Hebron": "الخليل (فلسطين)",
-    "Asia/Jerusalem": "القدس",
-    "Asia/Aden": "عدن (اليمن)",
-    "Africa/Cairo": "القاهرة (مصر)",
-    "Africa/Khartoum": "الخرطوم (السودان)",
-    "Africa/Tripoli": "طرابلس (ليبيا)",
-    "Africa/Tunis": "تونس",
-    "Africa/Algiers": "الجزائر",
-    "Africa/Casablanca": "الدار البيضاء (المغرب)",
-    "Europe/Istanbul": "إسطنبول (تركيا)",
-    "Europe/London": "لندن (بريطانيا)",
-    "Europe/Berlin": "برلين (ألمانيا)",
-    "Europe/Paris": "باريس (فرنسا)",
-    "Europe/Stockholm": "ستوكهولم (السويد)",
-    "America/New_York": "نيويورك (الساحل الشرقي لأمريكا)",
-    "America/Chicago": "شيكاغو (وسط أمريكا)",
-    "America/Los_Angeles": "لوس أنجلوس (الساحل الغربي)",
-    "America/Toronto": "تورونتو (كندا)",
-    "Australia/Sydney": "سيدني (أستراليا)",
-}
-
-# ==========================================
-# 🛡️ إعدادات واجهة المستخدم وتنسيق الأقسام (Tabs)
-# ==========================================
-st.set_page_config(page_title="بوابة زمالة الخليج", page_icon="📖", layout="centered")
-
-st.markdown("""
-<style>
-    body, [data-testid="stAppViewContainer"] {
-        -webkit-touch-callout: none !important;
-        -webkit-user-select: none !important;
-        user-select: none !important;
-    }
-    input, textarea {
-        -webkit-touch-callout: default !important;
-        -webkit-user-select: auto !important;
-        user-select: auto !important;
-    }
-    
-    /* تنسيق نظام القسمين (التبويبات / الزرين في المنتصف) ليصبحوا بحجم كبير وواضح */
-    div[data-testid="stTabs"] button {
-        font-size: 18px !important;
-        font-weight: 800 !important;
-        padding: 12px 20px !important;
-        color: #475569 !important;
-        border-radius: 8px 8px 0 0 !important;
-        transition: 0.3s !important;
-    }
-    div[data-testid="stTabs"] button[aria-selected="true"] {
-        color: #0f172a !important;
-        border-bottom-color: #2563eb !important;
-        background-color: #f8fafc !important;
-    }
-
-    /* الأزرار الأساسية (الخضراء) - للدخول والتحقق */
-    .stButton button[kind="primary"], .stLinkButton a {
-        background-color: #28a745 !important; 
-        color: white !important;
-        font-size: 20px !important;
-        font-weight: bold !important;
-        padding: 10px 25px !important;
-        border-radius: 8px !important;
-        text-align: center !important;
-        text-decoration: none !important;
-        width: 100% !important; 
-        display: block !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
-        transition: 0.3s !important;
-        border: none !important;
-    }
-    .stButton button[kind="primary"]:hover, .stLinkButton a:hover {
-        background-color: #218838 !important; 
-        transform: translateY(-2px) !important;
-    }
-
-    /* تصميم زر الحذف (الأحمر) لتمييزه بصرياً كإجراء تحذيري */
-    .stButton button[kind="secondary"] {
-        background-color: #dc3545 !important;
-        color: white !important;
-        font-size: 18px !important;
-        font-weight: bold !important;
-        padding: 10px 25px !important;
-        border-radius: 8px !important;
-        width: 100% !important;
-        border: 2px solid #dc3545 !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
-        transition: 0.3s !important;
-    }
-    .stButton button[kind="secondary"]:hover {
-        background-color: #c82333 !important;
-        border-color: #bd2130 !important;
-        transform: translateY(-2px) !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ==========================================
-# 🔧 Helper Functions
-# ==========================================
-
-def get_next_meeting_window(now_baghdad, target_weekday, open_h, open_m, close_h, close_m, end_h, end_m):
-    baghdad_tz = pytz.timezone("Asia/Baghdad")
-    days_ahead = (target_weekday - now_baghdad.weekday()) % 7
-    candidate_date = now_baghdad.date() + timedelta(days=days_ahead)
-
-    end_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(end_h, end_m)))
-    if days_ahead == 0 and now_baghdad > end_dt:
-        candidate_date += timedelta(days=7)
-        end_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(end_h, end_m)))
-
-    open_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(open_h, open_m)))
-    close_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(close_h, close_m)))
-    return open_dt, close_dt, end_dt
-
-def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_dt, next_meeting_label, next_meeting_dt, gate_status):
-    payload = {
-        "sunOpenMs": int(sun_open_dt.timestamp() * 1000),
-        "sunCloseMs": int(sun_close_dt.timestamp() * 1000),
-        "wedOpenMs": int(wed_open_dt.timestamp() * 1000),
-        "wedCloseMs": int(wed_close_dt.timestamp() * 1000),
-        "nextMeetingLabel": next_meeting_label,
-        "nextMeetingDate": next_meeting_dt.strftime("%Y-%m-%d"),
-        "gateStatus": gate_status,
-        "cityMap": ARABIC_CITY_NAMES,
-    }
-    payload_json = json.dumps(payload, ensure_ascii=False)
-    next_meeting_date_str = next_meeting_dt.strftime("%Y-%m-%d")
-
-    html_code = f"""
-    <!DOCTYPE html>
-    <html lang="ar" dir="rtl">
-    <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        * {{ box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Cairo", sans-serif; user-select: none; }}
-        html, body {{ margin: 0; padding: 0; background: transparent; direction: rtl; height: 100%; overflow-y: auto; }}
-        
-        .hero-card {{
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white; border-radius: 12px;
-            padding: 18px 20px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15); min-height: min-content; height: auto;
-        }}
-        .hero-top {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #334155; padding-bottom: 10px; }}
-        .hero-title {{ font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; }}
-        .status-badge {{ font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background-color: #ef4444; color: white; }}
-        .status-badge.open {{ background-color: #22c55e; animation: pulse 2s infinite; }}
-        .status-badge.rejoin {{ background-color: #3b82f6; }}
-        @keyframes pulse {{ 0% {{ box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }} 70% {{ box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }} 100% {{ box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }} }}
-        
-        .hero-main {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }}
-        .local-time-box {{ display: flex; flex-direction: column; gap: 4px; }}
-        .local-time-label {{ font-size: 13px; color: #94a3b8; }}
-        .local-time-value {{ font-size: 26px; font-weight: 800; color: #f8fafc; letter-spacing: 0.5px; }}
-        .local-city-label {{ font-size: 14px; color: #38bdf8; font-weight: 600; }}
-        .schedule-info-box {{ display: flex; flex-direction: column; gap: 4px; text-align: left; }}
-        .schedule-info-label {{ font-size: 13px; color: #94a3b8; }}
-        .schedule-info-value {{ font-size: 16px; font-weight: 600; color: #f8fafc; }}
-
-        .clocks-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }}
-        .clock-card {{ background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px 6px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }}
-        .city-title {{ font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 2px; }}
-        .city-time {{ font-size: 15px; font-weight: 800; color: #0f766e; letter-spacing: 0.3px; }}
-
-        .custom-selector-container {{ background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }}
-        .select-label {{ font-size: 14.5px; font-weight: 700; color: #0f172a; margin-bottom: 8px; display: block; }}
-        .city-select {{ width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 15px; background-color: #f8fafc; color: #1e293b; outline: none; cursor: pointer; }}
-        
-        .custom-result-card {{ margin-top: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-right: 4px solid #22c55e; border-radius: 8px; padding: 12px 15px; display: none; }}
-        .custom-card-header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #bbf7d0; padding-bottom: 8px; margin-bottom: 8px; }}
-        .custom-card-title {{ font-weight: 700; color: #166534; font-size: 15px; }}
-        .custom-card-time {{ font-weight: 800; color: #15803d; font-size: 16px; direction: ltr; }}
-        .custom-schedule-row {{ font-size: 14px; color: #14532d; margin-bottom: 4px; }}
-        
-        @media (max-width: 640px) {{
-            .clocks-grid {{ grid-template-columns: repeat(2, 1fr); }}
-            .hero-main {{ flex-direction: column; align-items: flex-start; }}
-            .schedule-info-box {{ text-align: right; }}
-            .custom-card-header {{ flex-direction: column; align-items: flex-start; gap: 5px; }}
-        }}
-
-        .dst-alert {{ margin-top: 8px; background-color: #fffbeb; border: 1px solid #fde68a; border-right: 4px solid #f59e0b; color: #92400e; padding: 8px 10px; border-radius: 6px; font-size: 13px; display: none; }}
-    </style>
-    </head>
-    <body>
-        <div class="hero-card">
-            <div class="hero-top">
-                <div class="hero-title">📅 الاجتماع القادم: يوم {next_meeting_label} ({next_meeting_date_str})</div>
-                <div id="gate-status-badge" class="status-badge">⛔ مغلق</div>
-            </div>
-            <div class="hero-main">
-                <div class="local-time-box">
-                    <div class="local-time-label">🕒 ساعتك المحلية الآن</div>
-                    <div class="local-time-value" id="clk-local">--:--:--</div>
-                    <div class="local-city-label" id="user-city-name">جاري التحديد...</div>
-                </div>
-                <div class="schedule-info-box">
-                    <div class="schedule-info-label">⏰ مواعيد البوابة بتوقيتك المحلي</div>
-                    <div class="schedule-info-value" id="local-open-time">--</div>
-                    <div class="schedule-info-value" id="local-close-time">--</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="clocks-grid">
-            <div class="clock-card"><div class="city-title">🇮🇶 بغداد</div><div class="city-time" id="clk-baghdad">--:--:--</div></div>
-            <div class="clock-card"><div class="city-title">🇸🇦 الرياض</div><div class="city-time" id="clk-riyadh">--:--:--</div></div>
-            <div class="clock-card"><div class="city-title">🇦🇪 دبي</div><div class="city-time" id="clk-dubai">--:--:--</div></div>
-            <div class="clock-card"><div class="city-title">🇪🇬 القاهرة</div><div class="city-time" id="clk-cairo">--:--:--</div></div>
-        </div>
-
-        <div class="custom-selector-container">
-            <label class="select-label" for="custom-city-select">🌍 ابحث عن مواعيد البوابة في أي مدينة أخرى:</label>
-            <select id="custom-city-select" class="city-select" onchange="updateCustomCityCard()">
-                <option value="">-- اختر المدينة / المنطقة --</option>
-            </select>
-            <div id="custom-result-card" class="custom-result-card">
-                <div class="custom-card-header">
-                    <div class="custom-card-title" id="custom-card-title-text">المدينة</div>
-                    <div class="custom-card-time" id="clk-custom">--:--:--</div>
-                </div>
-                <div class="custom-schedule-row">🔹 <b>الأحد:</b> <span id="custom-sun-times">--</span></div>
-                <div class="custom-schedule-row">🔹 <b>الأربعاء:</b> <span id="custom-wed-times">--</span></div>
-                <div class="dst-alert" id="custom-dst-alert">🔔 <b>تنبيه:</b> ستشهد هذه المدينة تغييراً في الساعة (التوقيت الصيفي/الشتوي) قبل موعد الاجتماع.</div>
-            </div>
-        </div>
-
-        <div class="dst-alert" id="local-dst-alert" style="margin-bottom:10px;">
-            🔔 <b>تنبيه (موقعك الحالي):</b> ستشهد منطقتك الزمنية تغييراً في التوقيت الصيفي/الشتوي قبل الاجتماع.
-        </div>
-
-        <script>
-            const DATA = {payload_json};
-            const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Baghdad";
-            const arabicCity = DATA.cityMap[userTz] || userTz;
-            document.getElementById("user-city-name").textContent = "📍 " + arabicCity + " (" + userTz + ")";
-
-            const selectEl = document.getElementById("custom-city-select");
-            for (const [tz, name] of Object.entries(DATA.cityMap)) {{
-                const opt = document.createElement("option"); opt.value = tz; opt.textContent = name; selectEl.appendChild(opt);
-            }}
-
-            function formatArabicLiveClock(dateObj, tz) {{
-                const parts = new Intl.DateTimeFormat('en-US', {{timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'}}).formatToParts(dateObj);
-                let h = 0, m = "00", s = "00";
-                for (const p of parts) {{
-                    if (p.type === 'hour') h = parseInt(p.value, 10);
-                    if (p.type === 'minute') m = p.value;
-                    if (p.type === 'second') s = p.value;
-                }}
-                if (h === 24) h = 0;
-                const period = h >= 12 ? "مساءً" : "صباحاً";
-                let h12 = h % 12; if (h12 === 0) h12 = 12;
-                return h12 + ":" + m + ":" + s + " " + period;
-            }}
-
-            function formatArabicShortTime(ms, tz) {{
-                const d = new Date(ms);
-                const parts = new Intl.DateTimeFormat('en-US', {{timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit'}}).formatToParts(d);
-                let h = 0, m = "00";
-                for (const p of parts) {{ if (p.type === 'hour') h = parseInt(p.value, 10); if (p.type === 'minute') m = p.value; }}
-                if (h === 24) h = 0;
-                const period = h >= 12 ? "مساءً" : "صباحاً";
-                let h12 = h % 12; if (h12 === 0) h12 = 12;
-                return h12 + ":" + m + " " + period;
-            }}
-
-            function getTzOffsetMinutes(dateObj, tz) {{
-                const utcDate = new Date(dateObj.toLocaleString('en-US', {{ timeZone: 'UTC' }}));
-                const tzDate = new Date(dateObj.toLocaleString('en-US', {{ timeZone: tz }}));
-                return Math.round((tzDate - utcDate) / 60000);
-            }}
-
-            function updateCustomCityCard() {{
-                const selectedTz = selectEl.value;
-                const card = document.getElementById("custom-result-card");
-                if (!selectedTz) {{ card.style.display = "none"; return; }}
-                
-                card.style.display = "block";
-                document.getElementById("custom-card-title-text").textContent = "📍 " + DATA.cityMap[selectedTz];
-                document.getElementById("custom-sun-times").textContent = "من " + formatArabicShortTime(DATA.sunOpenMs, selectedTz) + " حتى " + formatArabicShortTime(DATA.sunCloseMs, selectedTz);
-                document.getElementById("custom-wed-times").textContent = "من " + formatArabicShortTime(DATA.wedOpenMs, selectedTz) + " حتى " + formatArabicShortTime(DATA.wedCloseMs, selectedTz);
-
-                const nowOffset = getTzOffsetMinutes(new Date(), selectedTz);
-                const sunOffset = getTzOffsetMinutes(new Date(DATA.sunOpenMs), selectedTz);
-                const wedOffset = getTzOffsetMinutes(new Date(DATA.wedOpenMs), selectedTz);
-                document.getElementById("custom-dst-alert").style.display = (nowOffset !== sunOffset || nowOffset !== wedOffset) ? "block" : "none";
-                document.getElementById("clk-custom").textContent = formatArabicLiveClock(new Date(), selectedTz);
-            }}
-
-            function updateStatusBadge() {{
-                const badge = document.getElementById("gate-status-badge");
-                if (DATA.gateStatus === "OPEN_NEW") {{ badge.className = "status-badge open"; badge.innerHTML = "🟢 البوابة مفتوحة الآن"; }} 
-                else if (DATA.gateStatus === "REJOIN_ONLY") {{ badge.className = "status-badge rejoin"; badge.innerHTML = "🔵 إعادة دخول فقط"; }} 
-                else {{ badge.className = "status-badge"; badge.innerHTML = "⛔ مغلق حالياً"; }}
-            }}
-
-            function initStaticSchedules() {{
-                const isSunday = DATA.nextMeetingLabel === "الأحد";
-                const openMs = isSunday ? DATA.sunOpenMs : DATA.wedOpenMs;
-                const closeMs = isSunday ? DATA.sunCloseMs : DATA.wedCloseMs;
-
-                document.getElementById("local-open-time").textContent = "🔓 يفتح: " + formatArabicShortTime(openMs, userTz);
-                document.getElementById("local-close-time").textContent = "🔒 يغلق: " + formatArabicShortTime(closeMs, userTz);
-
-                const nowOffset = getTzOffsetMinutes(new Date(), userTz);
-                const openOffset = getTzOffsetMinutes(new Date(openMs), userTz);
-                if (nowOffset !== openOffset) {{ document.getElementById("local-dst-alert").style.display = "block"; }}
-            }}
-
-            function tickClocks() {{
-                const now = new Date();
-                document.getElementById("clk-baghdad").textContent = formatArabicLiveClock(now, "Asia/Baghdad");
-                document.getElementById("clk-riyadh").textContent = formatArabicLiveClock(now, "Asia/Riyadh");
-                document.getElementById("clk-dubai").textContent = formatArabicLiveClock(now, "Asia/Dubai");
-                document.getElementById("clk-cairo").textContent = formatArabicLiveClock(now, "Africa/Cairo");
-                document.getElementById("clk-local").textContent = formatArabicLiveClock(now, userTz);
-                
-                if (selectEl.value) {{ document.getElementById("clk-custom").textContent = formatArabicLiveClock(now, selectEl.value); }}
-            }}
-
-            updateStatusBadge(); initStaticSchedules(); tickClocks(); setInterval(tickClocks, 1000);
-        </script>
-    </body>
-    </html>
-    """
-    components.html(html_code, height=650, scrolling=True)
-
-def safe_execute(action_fn, max_retries=3, delay=2.0):
-    for attempt in range(max_retries):
-        try:
-            return action_fn()
-        except Exception as e:
-            if "429" in str(e) and attempt < max_retries - 1:
-                time.sleep(delay * (attempt + 1))
-                continue
-            raise e
-
-@st.cache_resource
-def get_google_client():
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    if "\\n" in creds_dict.get("private_key", ""):
-        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    return gspread.Client(auth=creds)
-
-@st.cache_data(ttl=3600)
-def get_meetings_data():
-    client = get_google_client()
-    master_sheet = safe_execute(lambda: client.open_by_key(MASTER_SHEET_ID).sheet1)
-    return pd.DataFrame(safe_execute(lambda: master_sheet.get_all_records()))
-
-@st.cache_data(ttl=60)
-def get_todays_attendees(target_sheet_id, today_date_str):
-    try:
-        client = get_google_client()
-        target_db = safe_execute(lambda: client.open_by_key(target_sheet_id))
-        try:
-            attendance_tab = safe_execute(lambda: target_db.worksheet("Attendance"))
-        except Exception:
-            attendance_tab = safe_execute(lambda: target_db.sheet1)
-        
-        records = safe_execute(lambda: attendance_tab.get_all_values())
-        attended_emails = set()
-        if records and len(records) > 1:
-            for row in records[1:]:
-                if len(row) >= 2:
-                    row_time = str(row[0]).strip()
-                    row_email = str(row[1]).strip().lower()
-                    if row_time.startswith(today_date_str):
-                        attended_emails.add(row_email)
-        return attended_emails
-    except Exception:
-        return set()
-
-@st.cache_data(ttl=600) 
-def get_cached_registered_emails(target_sheet_id):
-    client = get_google_client()
-    target_db = safe_execute(lambda: client.open_by_key(target_sheet_id))
-    reg_tab = safe_execute(lambda: target_db.worksheet("Registration"))
-    records = safe_execute(lambda: reg_tab.get_all_records())
-    reg_df = pd.DataFrame(records)
-    return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
-
-def get_live_registered_emails(target_sheet_id):
-    client = get_google_client()
-    target_db = safe_execute(lambda: client.open_by_key(target_sheet_id))
-    reg_tab = safe_execute(lambda: target_db.worksheet("Registration"))
-    records = safe_execute(lambda: reg_tab.get_all_records())
-    reg_df = pd.DataFrame(records)
-    return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
-
-# ==========================================
-# ⏰ تحديد حالة البوابة
-# ==========================================
-baghdad_tz = pytz.timezone("Asia/Baghdad")
-now = datetime.now(baghdad_tz)
-today_date_str = now.strftime("%Y-%m-%d")
-weekday = now.weekday()
-now_time = now.time()
-
-sun_open_dt, sun_close_dt, sun_end_dt = get_next_meeting_window(
-    now, 6, SUN_OPEN_HOUR, SUN_OPEN_MIN, SUN_CLOSE_HOUR, SUN_CLOSE_MIN, SUN_END_HOUR, SUN_END_MIN
-)
-wed_open_dt, wed_close_dt, wed_end_dt = get_next_meeting_window(
-    now, 2, WED_OPEN_HOUR, WED_OPEN_MIN, WED_CLOSE_HOUR, WED_CLOSE_MIN, WED_END_HOUR, WED_END_MIN
-)
-
-if sun_open_dt <= wed_open_dt:
-    next_meeting_day_name = "الأحد"
-    next_meeting_open_dt = sun_open_dt
-else:
-    next_meeting_day_name = "الأربعاء"
-    next_meeting_open_dt = wed_open_dt
-
-is_testing = st.secrets.get("test_mode", False)
-gate_status = "CLOSED" 
-
-if is_testing:
-    gate_status = "OPEN_NEW"
-else:
-    if weekday == 6:
-        open_t = dt_time(SUN_OPEN_HOUR, SUN_OPEN_MIN)
-        close_t = dt_time(SUN_CLOSE_HOUR, SUN_CLOSE_MIN)
-        end_t = dt_time(SUN_END_HOUR, SUN_END_MIN)
-        if open_t <= now_time <= close_t:
-            gate_status = "OPEN_NEW"
-        elif close_t < now_time <= end_t:
-            gate_status = "REJOIN_ONLY"
-    elif weekday == 2:
-        open_t = dt_time(WED_OPEN_HOUR, WED_OPEN_MIN)
-        close_t = dt_time(WED_CLOSE_HOUR, WED_CLOSE_MIN)
-        end_t = dt_time(WED_END_HOUR, WED_END_MIN)
-        if open_t <= now_time <= close_t:
-            gate_status = "OPEN_NEW"
-        elif close_t < now_time <= end_t:
-            gate_status = "REJOIN_ONLY"
-
-# ==========================================
-# 📖 العنوان والساعات الحية 
-# ==========================================
-st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
-
-render_live_clocks_and_local_detector(
-    sun_open_dt, sun_close_dt, wed_open_dt, wed_close_dt, next_meeting_day_name, next_meeting_open_dt, gate_status
-)
-
-st.markdown("""
-<div style="background-color: #e8f4f8; border-right: 5px solid #17a2b8; padding: 15px; border-radius: 8px; margin-bottom: 20px; direction: rtl; text-align: right;">
-    <h4 style="color: #0c5460; margin-top: 0; margin-bottom: 10px;">💡 تلميح تقني لتجربة أفضل</h4>
-    <p style="color: #0c5460; font-size: 15px; margin: 0;">
-        إذا فتحت هذه البوابة مباشرة من داخل <b>تطبيق الإيميل</b> ولم يفتح معك (Zoom) عند الضغط على زر الدخول، نرجو الضغط على <b>النقاط الثلاث (⋮)</b> بالأعلى، واختيار <b>"فتح في المتصفح" (يرجى استخدام متصفح جوجل كروم لفتح البوابة)</b>.
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# ==========================================
-# 🔘 نظام تقسيم البوابة إلى قسمين (Tabs)
-# ==========================================
-# تم إلغاء استخدام st.stop() هنا للسماح بخيار "حذف الحساب" بالعمل في كافة الأوقات
-tab_join, tab_delete = st.tabs(["🚀 قسم دخول الاجتماع", "🗑️ قسم حذف الحساب (إلغاء التسجيل)"])
-
-# ------------------------------------------
-# 🟢 القسم الأول: الدخول للاجتماع
-# ------------------------------------------
-with tab_join:
-    st.markdown("### 🚀 تسجيل الحضور ودخول القاعة")
-    
-    with st.expander("📖 دليل الاستخدام والقواعد التنظيمية الهامة (اضغط للقراءة)", expanded=False):
-        st.markdown("""
-        **الإخوة والأخوات، أعضاء وضيوف زمالة الخليج، تحية طيبة وبعد..**
-        
-        لضمان بيئة آمنة للتعافي، وحرصاً منا على احترام وقت الجميع وحماية اجتماعاتنا، نضع بين أيديكم دليل استخدام "البوابة الآلية".
-        
-        صُمم هذا النظام ليحمي خصوصيتنا التامة؛ فنحن لا نطلب ولا نحفظ أي أسماء أو بيانات شخصية، فقط **"بريدك الإلكتروني"** كمعرف وحيد لك.
-        
-        ### 📝 خطوات الدخول:
-        * **الرابط:** ادخل عبر الرابط المُرسل إلى بريدك الإلكتروني.
-        * **البريد الإلكتروني:** اكتب إيميلك المسجل لدينا بدقة.
-        * **عهد التعافي:** يُشترط قراءة التعهد بصدق نية الحضور الفعلي.
-        * **الدخول المباشر:** بعد الضغط على "تسجيل الحضور"، سيظهر لك زر أخضر ينقلك مباشرة لقاعة (Zoom).
-        
-        ### 🛑 الأمانة في الحضور (تنويه هام جداً):
-        نود التوضيح أن منصة (Zoom) تقوم تلقائياً بحفظ سجل دقيق بأسماء جميع الحاضرين ووقت دخولهم؛ لذا فإن آلية مطابقة من **"سجّل في البوابة"** مع من **"تواجد فعلياً في القاعة"** هي عملية بسيطة لدينا. نرجو الحرص على التسجيل فقط عندما تكون مستعداً للدخول الفعلي.
-        
-        ### ⏰ أوقات البوابة (الالتزام بالوقت):
-        النظام مبرمج آلياً ولا يقبل الاستثناءات *(المواعيد تظهر محولة تلقائياً لمدينتك في لوحة الأوقات بالأعلى)*:
-        * **تنبيه حازم:** تُغلق القاعة تماماً بعد 20 دقيقة من البداية. الدخول المبكر يعكس التزامنا الجاد بتعافينا.
-        
-        ### 🔄 ميزة إعادة الدخول (عند انقطاع الاتصال):
-        إذا انقطع عندك الإنترنت، افتح البوابة مرة أخرى وأدخل إيميلك. سيعرف النظام أنك "أثبت حضورك مسبقاً"، وسيعطيك الرابط فوراً.
-        
-        ### 🛠 حماية المجموعة:
-        يعمل النظام آلياً في الخلفية لحماية الزمالة عبر إيقاف الدعوات للمنقطعين ومسح الإيميلات الوهمية.
-        
-        > **وُجد هذا النظام لتطبيق المبادئ قبل الشخصيات، ولحماية قاعاتنا من أي فوضى.**
-        """)
-        
-    # التحقق من حالة البوابة داخل التبويب الأول فقط
-    if gate_status == "CLOSED":
-        st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
-    else:
-        if gate_status == "REJOIN_ONLY":
-            st.warning("⏳ **تنبيه:** انتهت فترة التسجيل للمرة الأولى. البوابة مفتوحة فقط لإعادة دخول من سجّل حضوره مسبقاً اليوم.")
-        elif gate_status == "OPEN_NEW":
-            st.markdown(f"""
-            <div style="background-color: #ffe6e6; padding: 15px; border-radius: 8px; border: 2px solid red; text-align: center; margin-bottom: 20px;">
-                <h3 style="color: #c62828; margin: 0; font-weight: bold; line-height: 1.4;">
-                    ⚠ يرجى العلم أن الغرفة ستغلق بعد {ROOM_LOCK_MINUTES} دقيقة من بداية الاجتماع.
-                </h3>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        data_loaded_successfully = False
-        try:
-            meetings_data = get_meetings_data()
-            available_meetings = [str(x).strip() for x in meetings_data['Meeting Day'].tolist()]
-            data_loaded_successfully = True
-        except Exception as e:
-            st.error(f"خطأ أثناء جلب البيانات: {e}")
-            
-        if data_loaded_successfully:
-            selected_meeting = "الأحد" if weekday == 6 else "الأربعاء"
-            if is_testing:
-                selected_meeting = st.radio("اختر الاجتماع (وضع الاختبار):", options=["الأحد", "الأربعاء"], horizontal=True, key="test_radio")
-                
-            if selected_meeting not in available_meetings:
-                st.error(f"⚠️ لم يتم العثور على إعدادات اجتماع **{selected_meeting}**.")
-            else:
-                st.info(f"📌 الاجتماع المحدد: **{selected_meeting}**")
-                
-                # إدخال البريد بقيمة مفتاح مخصصة (key) لمنع التداخل مع قسم الحذف
-                user_email = st.text_input("أدخل البريد الإلكتروني المسجل:", value=st.session_state.get('verified_email', ''), key="join_email_input").strip().lower()
-                
-                if 'verified_email' in st.session_state and user_email != st.session_state['verified_email']:
-                    st.session_state['trap_stage_1_passed'] = False
-                    
-                if 'today_attendees' not in st.session_state:
-                    st.session_state['today_attendees'] = set()
-                    
-                if not st.session_state.get('trap_stage_1_passed', False):
-                    if gate_status == "OPEN_NEW":
-                        st.markdown("---")
-                        st.markdown("### 🤝 عهد التعافي")
-                        pledge = st.checkbox("أتعهد بصدق وأمانة أمام نفسي وتجاه زمالتي، أنني أسجل الآن بنية الحضور الفعلي للاجتماع في وقته المحدد.", key="pledge_chk")
-                        btn_text = "تسجيل الحضور والدخول"
-                    else:
-                        pledge = True
-                        btn_text = "التحقق والعودة للاجتماع (Re-join)"
-                        
-                    if pledge:
-                        # الزر الأخضر (primary)
-                        if st.button(btn_text, type="primary", use_container_width=True, key="verify_btn"):
-                            if not user_email:
-                                st.warning("يرجى إدخال البريد الإلكتروني.")
-                            else:
-                                with st.spinner("جاري التحقق..."):
-                                    try:
-                                        meeting_info = meetings_data[meetings_data['Meeting Day'] == selected_meeting].iloc[0]
-                                        target_id = str(meeting_info['Target Sheet ID']).strip()
-                                        zoom_link = str(meeting_info['Zoom Link']).strip()
-                                        
-                                        if gate_status == "REJOIN_ONLY":
-                                            is_verified = False
-                                            if user_email in st.session_state.get('today_attendees', set()):
-                                                is_verified = True
-                                            else:
-                                                todays_attendees = get_todays_attendees(target_id, today_date_str)
-                                                if user_email in todays_attendees:
-                                                    is_verified = True
-                                                    
-                                            if is_verified:
-                                                st.session_state['trap_stage_1_passed'] = True
-                                                st.session_state['zoom_link'] = zoom_link
-                                                st.session_state['is_rejoin'] = True
-                                                st.session_state['verified_email'] = user_email
-                                                st.rerun()
-                                            else:
-                                                st.error("❌ عذراً، لم نجد تسجيل حضور لك اليوم قبل إغلاق البوابة.")
-                                                
-                                        else:
-                                            is_registered = False
-                                            cached_emails = get_cached_registered_emails(target_id)
-                                            if user_email in cached_emails:
-                                                is_registered = True
-                                            else:
-                                                live_emails = get_live_registered_emails(target_id)
-                                                if user_email in live_emails:
-                                                    is_registered = True
-                                                    get_cached_registered_emails.clear()
-                                                    
-                                            if is_registered:
-                                                st.session_state['trap_stage_1_passed'] = True
-                                                st.session_state['zoom_link'] = zoom_link
-                                                st.session_state['is_rejoin'] = False
-                                                st.session_state['verified_email'] = user_email
-                                                st.session_state['target_id'] = target_id
-                                                st.rerun()
-                                            else:
-                                                if selected_meeting == "الأربعاء":
-                                                    st.markdown("""
-                                                    <div style="background-color: #fff8e1; padding: 15px; border-radius: 8px; border-right: 5px solid #ffb300; text-align: right; margin-bottom: 20px;">
-                                                        <h4 style="color: #ff8f00; margin-top: 0;">عذراً، البريد الإلكتروني غير مسجل 📝</h4>
-                                                        <p style="color: #4e342e; font-size: 16px; margin-bottom: 0;">
-                                                            يبدو أن هذا الإيميل غير موجود في قائمة يوم الأربعاء، لكن يسعدنا جداً انضمامك إلينا!<br><br>
-                                                            <b>⏳ جاري تحويلك تلقائياً إلى صفحة التسجيل...</b>
-                                                        </p>
-                                                    </div>
-                                                    """, unsafe_allow_html=True)
-                                                    st.link_button("✨ الانتقال لصفحة التسجيل فوراً", WEDNESDAY_REGISTRATION_URL, use_container_width=True)
-                                                    redirect_code = f"""
-                                                    <meta http-equiv="refresh" content="4; url={WEDNESDAY_REGISTRATION_URL}">
-                                                    <script>
-                                                        setTimeout(function() {{ window.top.location.href = "{WEDNESDAY_REGISTRATION_URL}"; }}, 4000);
-                                                    </script>
-                                                    """
-                                                    st.markdown(redirect_code, unsafe_allow_html=True)
-                                                else:
-                                                    st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}.")
-                                                    
-                                    except Exception as e:
-                                        st.error(f"حدث خطأ: {e}")
-                    else:
-                        st.info("💡 يرجى وضع علامة (صح) على التعهد لتفعيل زر الدخول.")
-                        
-                if st.session_state.get('trap_stage_1_passed', False):
-                    st.markdown("---")
-                    if st.session_state.get('is_rejoin', False):
-                        st.success("✅ مرحباً بعودتك! تم التحقق من تسجيلك المسبق.")
-                    else:
-                        st.success("✅ تم تسجيل حضورك بنجاح!")
-                        
-                    st.info("💡 اضغط على الزر أدناه للانتقال فوراً إلى قاعة (Zoom).")
-                    
-                    # الزر الأخضر (primary)
-                    if st.button("🚀 الدخول المباشر للاجتماع", type="primary", use_container_width=True, key="direct_entry_btn"):
-                        zoom_link = st.session_state['zoom_link']
-                        user_email_to_record = st.session_state['verified_email']
-                        
-                        if not st.session_state.get('is_rejoin', False):
-                            with st.spinner("جاري تأكيد دخولك للقاعة..."):
-                                try:
-                                    baghdad_time = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
-                                    client = get_google_client()
-                                    target_id = st.session_state['target_id']
-                                    target_db = safe_execute(lambda: client.open_by_key(target_id))
-                                    try:
-                                        attendance_tab = safe_execute(lambda: target_db.worksheet("Attendance"))
-                                    except Exception:
-                                        attendance_tab = safe_execute(lambda: target_db.sheet1)
-                                        
-                                    safe_execute(lambda: attendance_tab.append_row([baghdad_time, user_email_to_record]))
-                                    
-                                    get_todays_attendees.clear()
-                                    st.session_state['today_attendees'].add(user_email_to_record)
-                                    st.session_state['is_rejoin'] = True 
-                                except Exception as e:
-                                    st.error(f"حدث خطأ أثناء الاتصال بقاعدة البيانات: {e}")
-                                    
-                        st.markdown(f"""
-                        <meta http-equiv="refresh" content="0; url={zoom_link}">
-                        <script>
-                            window.top.location.href = "{zoom_link}";
-                        </script>
-                        """, unsafe_allow_html=True)
-                        
-                        st.info("⏳ جاري فتح قاعة Zoom، يرجى الانتظار...")
-                        st.warning("⚠️ إذا لم يفتح تطبيق زووم تلقائياً الآن، اضغط على الزر أدناه:")
-                        st.link_button("🔗 اضغط هنا لفتح قاعة Zoom يدوياً", zoom_link, use_container_width=True)
-
 # ------------------------------------------
 # 🔴 القسم الثاني: حذف الحساب وإلغاء التسجيل
 # ------------------------------------------
@@ -736,63 +13,114 @@ with tab_delete:
     </div>
     """, unsafe_allow_html=True)
     
-    # إدخال البريد بقيمة مفتاح مخصصة لمنع التداخل مع قسم الدخول
     delete_email = st.text_input("أدخل بريدك الإلكتروني المراد حذفه:", key="delete_email_input").strip().lower()
     confirm_delete = st.checkbox("أؤكد رغبتي الأكيدة في مسح بياناتي نهائياً من سجلات البوابة.", key="confirm_del_chk")
     
-    # الزر الأحمر (secondary) المخصص للحذف
+    # 🌟 حاوية فارغة مخصصة لإظهار النافذة المنبثقة (Popup) فوق الشاشة
+    overlay_placeholder = st.empty()
+    
     if st.button("🗑️ حذف حسابي الآن", type="secondary", use_container_width=True, key="execute_delete_btn"):
         if not delete_email:
             st.error("يرجى إدخال البريد الإلكتروني الذي ترغب في حذفه.")
         elif not confirm_delete:
             st.error("يرجى تفعيل خيار التأكيد (وضع علامة صح) لتنفيذ الحذف.")
         else:
-            with st.spinner("جاري مسح بياناتك من خوادم السجلات..."):
+            # 1. إظهار شاشة التحميل المنبثقة التي تغلق الشاشة وتمنع النقر
+            overlay_placeholder.markdown("""
+            <style>
+                .blocking-overlay {
+                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                    background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(5px);
+                    z-index: 999999; display: flex; flex-direction: column;
+                    justify-content: center; align-items: center;
+                    direction: rtl; font-family: 'Cairo', sans-serif;
+                }
+                .spin-loader {
+                    border: 6px solid #334155; border-top: 6px solid #ef4444;
+                    border-radius: 50%; width: 80px; height: 80px;
+                    animation: spin 1s linear infinite; margin-bottom: 25px;
+                    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+                }
+                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                .overlay-title { color: #f8fafc; font-size: 24px; font-weight: 700; margin: 0 0 10px 0; text-align: center; }
+                .overlay-subtitle { color: #94a3b8; font-size: 16px; margin: 0; text-align: center; }
+            </style>
+            <div class="blocking-overlay">
+                <div class="spin-loader"></div>
+                <h2 class="overlay-title">جاري مسح بياناتك نهائياً...</h2>
+                <p class="overlay-subtitle">⏳ يرجى عدم النقر أو إغلاق الصفحة حتى تكتمل العملية</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # 2. تنفيذ كود الحذف في الخلفية
+            try:
+                client = get_google_client()
+                deleted_from_any = False
+                
                 try:
-                    client = get_google_client()
-                    deleted_from_any = False
+                    meetings_data_del = get_meetings_data()
+                    available_meetings_del = [str(x).strip() for x in meetings_data_del['Meeting Day'].tolist()]
                     
-                    try:
-                        # جلب المعرفات بشكل آمن للمسح
-                        meetings_data_del = get_meetings_data()
-                        available_meetings_del = [str(x).strip() for x in meetings_data_del['Meeting Day'].tolist()]
-                        
-                        for meeting_day in available_meetings_del:
-                            try:
-                                meeting_info_del = meetings_data_del[meetings_data_del['Meeting Day'] == meeting_day].iloc[0]
-                                target_id_del = str(meeting_info_del['Target Sheet ID']).strip()
-                                
-                                target_db_del = safe_execute(lambda: client.open_by_key(target_id_del))
-                                reg_tab_del = safe_execute(lambda: target_db_del.worksheet("Registration"))
-                                
-                                emails_col = safe_execute(lambda: reg_tab_del.col_values(2))
-                                
-                                row_to_delete = None
-                                for idx, val in enumerate(emails_col):
-                                    if val.strip().lower() == delete_email:
-                                        row_to_delete = idx + 1 
-                                        break
-                                        
-                                if row_to_delete:
-                                    safe_execute(lambda: reg_tab_del.delete_rows(row_to_delete))
-                                    deleted_from_any = True
-                            except Exception:
-                                # في حال لم يجد الإيميل في شيت الأحد مثلاً، يتجاوز الخطأ بصمت وينتقل لشيت الأربعاء
-                                continue
-                                
-                    except Exception as loop_e:
-                        st.error(f"مشكلة أثناء قراءة السجلات: {loop_e}")
-                        
-                    if deleted_from_any:
-                        # مسح الكاش الصحيح فقط لضمان عدم بقاء نسخة مخزنة مؤقتاً
-                        get_cached_registered_emails.clear()
-                        
-                        st.success("✅ تمت العملية. تم مسح بريدك الإلكتروني وإلغاء تسجيلك بالكامل من زمالة الخليج. نتمنى لك التوفيق.")
-                        time.sleep(3)
-                        st.rerun()
-                    else:
-                        st.info("💡 لم نعثر على هذا البريد الإلكتروني في سجلاتنا. قد يكون غير مسجل أو تم حذفه مسبقاً.")
-                        
-                except Exception as e:
-                    st.error(f"حدث خطأ أثناء محاولة الاتصال بقاعدة البيانات: {e}")
-                    st.error(f"حدث خطأ أثناء محاولة الاتصال بقاعدة البيانات: {e}")
+                    for meeting_day in available_meetings_del:
+                        try:
+                            meeting_info_del = meetings_data_del[meetings_data_del['Meeting Day'] == meeting_day].iloc[0]
+                            target_id_del = str(meeting_info_del['Target Sheet ID']).strip()
+                            
+                            target_db_del = safe_execute(lambda: client.open_by_key(target_id_del))
+                            reg_tab_del = safe_execute(lambda: target_db_del.worksheet("Registration"))
+                            
+                            emails_col = safe_execute(lambda: reg_tab_del.col_values(2))
+                            
+                            row_to_delete = None
+                            for idx, val in enumerate(emails_col):
+                                if val.strip().lower() == delete_email:
+                                    row_to_delete = idx + 1 
+                                    break
+                                    
+                            if row_to_delete:
+                                safe_execute(lambda: reg_tab_del.delete_rows(row_to_delete))
+                                deleted_from_any = True
+                        except Exception:
+                            continue
+                            
+                except Exception as loop_e:
+                    overlay_placeholder.empty() # إخفاء الشاشة المنبثقة عند الخطأ
+                    st.error(f"مشكلة أثناء قراءة السجلات: {loop_e}")
+                    
+                if deleted_from_any:
+                    get_cached_registered_emails.clear()
+                    
+                    # 3. تغيير الشاشة المنبثقة لتظهر علامة النجاح وتأكيد الحذف
+                    overlay_placeholder.markdown("""
+                    <style>
+                        .blocking-overlay {
+                            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                            background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(5px);
+                            z-index: 999999; display: flex; flex-direction: column;
+                            justify-content: center; align-items: center;
+                            direction: rtl; font-family: 'Cairo', sans-serif;
+                        }
+                        .success-icon {
+                            font-size: 80px; margin-bottom: 20px;
+                            animation: pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                        }
+                        @keyframes pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+                        .overlay-title { color: #22c55e; font-size: 26px; font-weight: 700; margin: 0 0 10px 0; text-align: center; }
+                        .overlay-subtitle { color: #f8fafc; font-size: 16px; margin: 0; text-align: center; }
+                    </style>
+                    <div class="blocking-overlay">
+                        <div class="success-icon">✅</div>
+                        <h2 class="overlay-title">تمت العملية بنجاح</h2>
+                        <p class="overlay-subtitle">تم مسح بريدك الإلكتروني وإلغاء تسجيلك بالكامل.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    time.sleep(3.5) # إبقاء رسالة النجاح لثلاث ثوانٍ ونصف
+                    st.rerun() # إعادة تحميل الصفحة تلقائياً
+                else:
+                    overlay_placeholder.empty() # إخفاء الشاشة المنبثقة
+                    st.info("💡 لم نعثر على هذا البريد الإلكتروني في سجلاتنا. قد يكون غير مسجل أو تم حذفه مسبقاً.")
+                    
+            except Exception as e:
+                overlay_placeholder.empty() # إخفاء الشاشة المنبثقة
+                st.error(f"حدث خطأ أثناء محاولة الاتصال بقاعدة البيانات: {e}")
