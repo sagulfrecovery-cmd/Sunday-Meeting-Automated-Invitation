@@ -186,53 +186,63 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        * {{ box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Cairo", sans-serif; user-select: none; }}
-        html, body {{ margin: 0; padding: 0; background: transparent; direction: rtl; height: 100%; overflow-y: auto; }}
+        * {{
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Cairo", sans-serif;
+            user-select: none;
+        }}
+        html, body {{
+            margin: 0; padding: 0; background: transparent; direction: rtl; height: 100%; overflow-y: auto;
+        }}
         
+        /* Hero Section - الهوامش مضغوطة */
         .hero-card {{
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white; border-radius: 12px;
-            padding: 18px 20px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 12px;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: white; border-radius: 12px; padding: 15px 18px; margin-bottom: 12px;
+            display: flex; flex-direction: column; gap: 10px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.15); min-height: min-content; height: auto;
         }}
-        .hero-top {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #334155; padding-bottom: 10px; }}
-        .hero-title {{ font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; }}
-        .status-badge {{ font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background-color: #ef4444; color: white; }}
+        .hero-top {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #334155; padding-bottom: 8px; }}
+        .hero-title {{ font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 6px; }}
+        .status-badge {{ font-size: 12.5px; font-weight: 700; padding: 3px 10px; border-radius: 20px; background-color: #ef4444; color: white; }}
         .status-badge.open {{ background-color: #22c55e; animation: pulse 2s infinite; }}
         .status-badge.rejoin {{ background-color: #3b82f6; }}
         @keyframes pulse {{ 0% {{ box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }} 70% {{ box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }} 100% {{ box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }} }}
         
-        .hero-main {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }}
-        .local-time-box {{ display: flex; flex-direction: column; gap: 4px; }}
-        .local-time-label {{ font-size: 13px; color: #94a3b8; }}
-        .local-time-value {{ font-size: 26px; font-weight: 800; color: #f8fafc; letter-spacing: 0.5px; }}
-        .local-city-label {{ font-size: 14px; color: #38bdf8; font-weight: 600; }}
-        .schedule-info-box {{ display: flex; flex-direction: column; gap: 4px; text-align: left; }}
-        .schedule-info-label {{ font-size: 13px; color: #94a3b8; }}
-        .schedule-info-value {{ font-size: 16px; font-weight: 600; color: #f8fafc; }}
+        .hero-main {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }}
+        .local-time-box {{ display: flex; flex-direction: column; gap: 2px; }}
+        .local-time-label {{ font-size: 12.5px; color: #94a3b8; }}
+        .local-time-value {{ font-size: 24px; font-weight: 800; color: #f8fafc; letter-spacing: 0.5px; }}
+        .local-city-label {{ font-size: 13.5px; color: #38bdf8; font-weight: 600; }}
+        .schedule-info-box {{ display: flex; flex-direction: column; gap: 2px; text-align: left; }}
+        .schedule-info-label {{ font-size: 12.5px; color: #94a3b8; }}
+        .schedule-info-value {{ font-size: 15px; font-weight: 600; color: #f8fafc; }}
 
-        .clocks-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }}
-        .clock-card {{ background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px 6px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }}
-        .city-title {{ font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 2px; }}
-        .city-time {{ font-size: 15px; font-weight: 800; color: #0f766e; letter-spacing: 0.3px; }}
+        /* Clocks Grid - الهوامش مضغوطة */
+        .clocks-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }}
+        .clock-card {{ background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 6px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }}
+        .city-title {{ font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 2px; }}
+        .city-time {{ font-size: 14.5px; font-weight: 800; color: #0f766e; letter-spacing: 0.2px; }}
 
-        .custom-selector-container {{ background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }}
-        .select-label {{ font-size: 14.5px; font-weight: 700; color: #0f172a; margin-bottom: 8px; display: block; }}
-        .city-select {{ width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 15px; background-color: #f8fafc; color: #1e293b; outline: none; cursor: pointer; }}
+        /* Custom Selector Section - الهوامش مضغوطة */
+        .custom-selector-container {{ background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }}
+        .select-label {{ font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 6px; display: block; }}
+        .city-select {{ width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14.5px; background-color: #f8fafc; color: #1e293b; outline: none; cursor: pointer; }}
         
-        .custom-result-card {{ margin-top: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-right: 4px solid #22c55e; border-radius: 8px; padding: 12px 15px; display: none; }}
-        .custom-card-header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #bbf7d0; padding-bottom: 8px; margin-bottom: 8px; }}
-        .custom-card-title {{ font-weight: 700; color: #166534; font-size: 15px; }}
-        .custom-card-time {{ font-weight: 800; color: #15803d; font-size: 16px; direction: ltr; }}
-        .custom-schedule-row {{ font-size: 14px; color: #14532d; margin-bottom: 4px; }}
+        .custom-result-card {{ margin-top: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-right: 4px solid #22c55e; border-radius: 8px; padding: 10px 12px; display: none; }}
+        .custom-card-header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #bbf7d0; padding-bottom: 6px; margin-bottom: 6px; }}
+        .custom-card-title {{ font-weight: 700; color: #166534; font-size: 14.5px; }}
+        .custom-card-time {{ font-weight: 800; color: #15803d; font-size: 15px; direction: ltr; }}
+        .custom-schedule-row {{ font-size: 13.5px; color: #14532d; margin-bottom: 3px; }}
         
         @media (max-width: 640px) {{
-            .clocks-grid {{ grid-template-columns: repeat(2, 1fr); }}
+            .clocks-grid {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }}
             .hero-main {{ flex-direction: column; align-items: flex-start; }}
             .schedule-info-box {{ text-align: right; }}
-            .custom-card-header {{ flex-direction: column; align-items: flex-start; gap: 5px; }}
+            .custom-card-header {{ flex-direction: column; align-items: flex-start; gap: 4px; }}
         }}
 
-        .dst-alert {{ margin-top: 8px; background-color: #fffbeb; border: 1px solid #fde68a; border-right: 4px solid #f59e0b; color: #92400e; padding: 8px 10px; border-radius: 6px; font-size: 13px; display: none; }}
+        .dst-alert {{ margin-top: 8px; background-color: #fffbeb; border: 1px solid #fde68a; border-right: 4px solid #f59e0b; color: #92400e; padding: 6px 10px; border-radius: 6px; font-size: 12.5px; display: none; }}
     </style>
     </head>
     <body>
@@ -377,8 +387,9 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
     </body>
     </html>
     """
-    components.html(html_code, height=650, scrolling=True)
-
+    
+    # 🌟 تقليص الارتفاع إلى 470 ليلتصق التلميح التقني بالبطاقة مباشرة على اللابتوب
+    components.html(html_code, height=470, scrolling=True)
 def safe_execute(action_fn, max_retries=3, delay=2.0):
     for attempt in range(max_retries):
         try:
