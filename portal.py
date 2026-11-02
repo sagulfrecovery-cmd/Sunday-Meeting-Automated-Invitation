@@ -758,30 +758,35 @@ with tab_delete:
                         available_meetings_del = [str(x).strip() for x in meetings_data_del['Meeting Day'].tolist()]
                         
                         for meeting_day in available_meetings_del:
-                            meeting_info_del = meetings_data_del[meetings_data_del['Meeting Day'] == meeting_day].iloc[0]
-                            target_id_del = str(meeting_info_del['Target Sheet ID']).strip()
-                            
-                            target_db_del = safe_execute(lambda: client.open_by_key(target_id_del))
-                            reg_tab_del = safe_execute(lambda: target_db_del.worksheet("Registration"))
-                            
-                            emails_col = safe_execute(lambda: reg_tab_del.col_values(2))
-                            
-                            row_to_delete = None
-                            for idx, val in enumerate(emails_col):
-                                if val.strip().lower() == delete_email:
-                                    row_to_delete = idx + 1 
-                                    break
-                                    
-                            if row_to_delete:
-                                safe_execute(lambda: reg_tab_del.delete_rows(row_to_delete))
-                                deleted_from_any = True
+                            try:
+                                meeting_info_del = meetings_data_del[meetings_data_del['Meeting Day'] == meeting_day].iloc[0]
+                                target_id_del = str(meeting_info_del['Target Sheet ID']).strip()
+                                
+                                target_db_del = safe_execute(lambda: client.open_by_key(target_id_del))
+                                reg_tab_del = safe_execute(lambda: target_db_del.worksheet("Registration"))
+                                
+                                emails_col = safe_execute(lambda: reg_tab_del.col_values(2))
+                                
+                                row_to_delete = None
+                                for idx, val in enumerate(emails_col):
+                                    if val.strip().lower() == delete_email:
+                                        row_to_delete = idx + 1 
+                                        break
+                                        
+                                if row_to_delete:
+                                    safe_execute(lambda: reg_tab_del.delete_rows(row_to_delete))
+                                    deleted_from_any = True
+                            except Exception:
+                                # في حال لم يجد الإيميل في شيت الأحد مثلاً، يتجاوز الخطأ بصمت وينتقل لشيت الأربعاء
+                                continue
+                                
                     except Exception as loop_e:
                         st.error(f"مشكلة أثناء قراءة السجلات: {loop_e}")
                         
                     if deleted_from_any:
-                        # مسح الكاش لضمان عدم بقاء نسخة مخزنة مؤقتاً
+                        # مسح الكاش الصحيح فقط لضمان عدم بقاء نسخة مخزنة مؤقتاً
                         get_cached_registered_emails.clear()
-                        get_live_registered_emails.clear()
+                        
                         st.success("✅ تمت العملية. تم مسح بريدك الإلكتروني وإلغاء تسجيلك بالكامل من زمالة الخليج. نتمنى لك التوفيق.")
                         time.sleep(3)
                         st.rerun()
@@ -789,4 +794,5 @@ with tab_delete:
                         st.info("💡 لم نعثر على هذا البريد الإلكتروني في سجلاتنا. قد يكون غير مسجل أو تم حذفه مسبقاً.")
                         
                 except Exception as e:
+                    st.error(f"حدث خطأ أثناء محاولة الاتصال بقاعدة البيانات: {e}")
                     st.error(f"حدث خطأ أثناء محاولة الاتصال بقاعدة البيانات: {e}")
