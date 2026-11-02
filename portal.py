@@ -89,7 +89,9 @@ st.markdown("""
         -webkit-user-select: auto !important;
         user-select: auto !important;
     }
-    .stButton button, .stLinkButton a {
+    
+    /* الأزرار الأساسية (الخضراء) - للدخول والتحقق */
+    .stButton button[kind="primary"], .stLinkButton a {
         background-color: #28a745 !important; 
         color: white !important;
         font-size: 20px !important;
@@ -104,8 +106,27 @@ st.markdown("""
         transition: 0.3s !important;
         border: none !important;
     }
-    .stButton button:hover, .stLinkButton a:hover {
+    .stButton button[kind="primary"]:hover, .stLinkButton a:hover {
         background-color: #218838 !important; 
+        transform: translateY(-2px) !important;
+    }
+
+    /* تصميم زر الحذف (الأحمر) لتمييزه بصرياً كإجراء تحذيري */
+    .stButton button[kind="secondary"] {
+        background-color: #dc3545 !important;
+        color: white !important;
+        font-size: 18px !important;
+        font-weight: bold !important;
+        padding: 10px 25px !important;
+        border-radius: 8px !important;
+        width: 100% !important;
+        border: 2px solid #dc3545 !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+        transition: 0.3s !important;
+    }
+    .stButton button[kind="secondary"]:hover {
+        background-color: #c82333 !important;
+        border-color: #bd2130 !important;
         transform: translateY(-2px) !important;
     }
 </style>
@@ -368,14 +389,12 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
                 card.style.display = "block";
                 document.getElementById("custom-card-title-text").textContent = "📍 " + DATA.cityMap[selectedTz];
                 
-                // Calculate Sun and Wed times
                 const sunRange = "من " + formatArabicShortTime(DATA.sunOpenMs, selectedTz) + " حتى " + formatArabicShortTime(DATA.sunCloseMs, selectedTz);
                 const wedRange = "من " + formatArabicShortTime(DATA.wedOpenMs, selectedTz) + " حتى " + formatArabicShortTime(DATA.wedCloseMs, selectedTz);
                 
                 document.getElementById("custom-sun-times").textContent = sunRange;
                 document.getElementById("custom-wed-times").textContent = wedRange;
 
-                // Check DST for custom city
                 const nowOffset = getTzOffsetMinutes(new Date(), selectedTz);
                 const sunOffset = getTzOffsetMinutes(new Date(DATA.sunOpenMs), selectedTz);
                 const wedOffset = getTzOffsetMinutes(new Date(DATA.wedOpenMs), selectedTz);
@@ -386,7 +405,6 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
                     alertDiv.style.display = "none";
                 }}
                 
-                // Immediate clock update
                 document.getElementById("clk-custom").textContent = formatArabicLiveClock(new Date(), selectedTz);
             }}
 
@@ -441,7 +459,6 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
     </body>
     </html>
     """
-    # زيادة الارتفاع ليتسع للقائمة المنسدلة والبطاقة المخصصة أسفلها بدون قص
     components.html(html_code, height=650, scrolling=True)
 
 def safe_execute(action_fn, max_retries=3, delay=2.0):
@@ -681,7 +698,7 @@ if not st.session_state.get('trap_stage_1_passed', False):
         btn_text = "التحقق والعودة للاجتماع (Re-join)"
 
     if pledge:
-        if st.button(btn_text, use_container_width=True):
+        if st.button(btn_text, type="primary", use_container_width=True):
             if not user_email:
                 st.warning("يرجى إدخال البريد الإلكتروني.")
             else:
@@ -767,7 +784,7 @@ if st.session_state.get('trap_stage_1_passed', False):
         
     st.info("💡 اضغط على الزر أدناه للانتقال فوراً إلى قاعة (Zoom).")
 
-    if st.button("🚀 الدخول المباشر للاجتماع", use_container_width=True):
+    if st.button("🚀 الدخول المباشر للاجتماع", type="primary", use_container_width=True):
         zoom_link = st.session_state['zoom_link']
         user_email_to_record = st.session_state['verified_email']
         
@@ -801,3 +818,68 @@ if st.session_state.get('trap_stage_1_passed', False):
         st.info("⏳ جاري فتح قاعة Zoom، يرجى الانتظار...")
         st.warning("⚠️ إذا لم يفتح تطبيق زووم تلقائياً الآن، اضغط على الزر أدناه:")
         st.link_button("🔗 اضغط هنا لفتح قاعة Zoom يدوياً", zoom_link, use_container_width=True)
+
+# ==========================================
+# 🗑️ خيار حذف الحساب (إلغاء التسجيل التلقائي)
+# ==========================================
+st.markdown("---")
+with st.expander("🗑️ حذف حسابك (إلغاء التسجيل نهائياً)", expanded=False):
+    st.markdown("""
+    <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; border-right: 5px solid #ffc107; text-align: right; margin-bottom: 15px;">
+        <h4 style="color: #856404; margin-top: 0;">⚠️ تنبيه هام</h4>
+        <p style="color: #856404; font-size: 14px; margin-bottom: 0;">
+            سيؤدي هذا الإجراء إلى <b>حذف بريدك الإلكتروني نهائياً</b> من قائمة المسموح لهم بالدخول، ولن تصلك أي روابط لاجتماعاتنا مستقبلاً. إذا أردت العودة لاحقاً، سيتوجب عليك التسجيل كعضو جديد.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    delete_email = st.text_input("أدخل بريدك الإلكتروني لإلغاء تسجيلك:", key="delete_email_input").strip().lower()
+    confirm_delete = st.checkbox("أؤكد رغبتي بصدق في حذف إيميلي نهائياً من سجلات زمالة الخليج.")
+    
+    if st.button("🗑️ حذف بياناتي الآن", type="secondary", use_container_width=True):
+        if not delete_email:
+            st.error("يرجى إدخال البريد الإلكتروني أولاً.")
+        elif not confirm_delete:
+            st.error("يرجى وضع علامة (صح) لتأكيد طلب الحذف.")
+        else:
+            with st.spinner("جاري البحث وحذف بياناتك من السجلات..."):
+                try:
+                    client = get_google_client()
+                    deleted_from_any = False
+                    
+                    try:
+                        meetings_data_delete = get_meetings_data()
+                        available_meetings_delete = [str(x).strip() for x in meetings_data_delete['Meeting Day'].tolist()]
+                        
+                        for meeting_day in available_meetings_delete:
+                            meeting_info_delete = meetings_data_delete[meetings_data_delete['Meeting Day'] == meeting_day].iloc[0]
+                            target_id_delete = str(meeting_info_delete['Target Sheet ID']).strip()
+                            
+                            target_db_delete = safe_execute(lambda: client.open_by_key(target_id_delete))
+                            reg_tab_delete = safe_execute(lambda: target_db_delete.worksheet("Registration"))
+                            
+                            emails_col = safe_execute(lambda: reg_tab_delete.col_values(2))
+                            
+                            row_to_delete = None
+                            for idx, val in enumerate(emails_col):
+                                if val.strip().lower() == delete_email:
+                                    row_to_delete = idx + 1 
+                                    break
+                                    
+                            if row_to_delete:
+                                safe_execute(lambda: reg_tab_delete.delete_rows(row_to_delete))
+                                deleted_from_any = True
+                    except Exception as loop_e:
+                        st.error(f"مشكلة أثناء قراءة قوائم التسجيل: {loop_e}")
+                            
+                    if deleted_from_any:
+                        get_cached_registered_emails.clear()
+                        get_live_registered_emails.clear()
+                        st.success("✅ تم مسح بريدك الإلكتروني بالكامل من سجلاتنا بنجاح. نتمنى لك كل التوفيق في مسيرة تعافيك.")
+                        time.sleep(3)
+                        st.rerun()
+                    else:
+                        st.info("لم نتمكن من العثور على هذا البريد الإلكتروني في سجلاتنا الحالية.")
+                        
+                except Exception as e:
+                    st.error(f"حدث خطأ أثناء محاولة الاتصال بقاعدة البيانات: {e}")
