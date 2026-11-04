@@ -164,7 +164,8 @@ def run_maintenance(meetings_data):
                 
             last_seen = {}
             for row in check_in_records:
-                em = str(row.get('Email', '')).strip().lower()
+                # التعديل الأول: دعم العمودين في سجلات الحضور
+                em = str(row.get('Email', row.get('Email Address', ''))).strip().lower()
                 ts = str(row.get('Timestamp', ''))
                 if em and ts:
                     try:
@@ -178,7 +179,9 @@ def run_maintenance(meetings_data):
             
             rows_to_delete = []
             for i, row in enumerate(reg_records):
-                em = str(row.get('Email', '')).strip().lower()
+                # التعديل الثاني والأهم: دعم قراءة الإيميل من ورقة التسجيل أياً كان اسم العمود
+                em = str(row.get('Email Address', row.get('Email', ''))).strip().lower()
+                
                 if not em: continue
                 absences = get_safe_absences(row)
                 if em in bounced_emails:
