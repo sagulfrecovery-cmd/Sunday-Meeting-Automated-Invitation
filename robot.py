@@ -66,6 +66,22 @@ def send_email(subject, html_body, to_emails):
     except Exception as e:
         print(f"❌ Failed to send email '{subject}': {e}")
 
+def send_bcc_email(subject, text_body, bcc_emails):
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = subject
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = SENDER_EMAIL  # Standard practice to prevent spam filters rejecting empty To fields
+    msg['Bcc'] = ", ".join(bcc_emails)
+    msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
+    try:
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login(SENDER_EMAIL, APP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        print(f"📧 BCC Email sent successfully: {subject} to {len(bcc_emails)} recipients.")
+    except Exception as e:
+        print(f"❌ Failed to send BCC email '{subject}': {e}")
+
 def create_draft(subject, body, emails, invite_method, is_html=False, static_to=None):
     if not emails: return
     
@@ -117,7 +133,7 @@ def get_dynamic_time_html(utc_time_str):
             ("Asia/Dubai", "الإمارات وعُمان (دبي/مسقط)"),
             ("Asia/Riyadh", "السعودية والكويت (مكة/الرياض)"),
             ("Asia/Baghdad", "العراق (بغداد)"),
-            ("Asia/Amman", "الشام (عَمَّان/دمشق)"),
+            ("Asia/Amman", "الشام (عَمَّان/دمشق)"),
             ("Asia/Beirut", "لبنان (بيروت)"),
             ("Africa/Cairo", "مصر (القاهرة)")
         ]
@@ -435,17 +451,19 @@ def run_robot():
 
                 reg_tab.update_cells(cells_to_update)
 
-            # Send warnings
+            # Send warnings automatically
             if absent_yesterday:
                 notice_subject = "نفتقدك في زمالة الخليج"
                 notice_body = f"مرحباً،\n\nلاحظنا عدم حضورك لاجتماعنا أمس ({yesterday_name})، ونتمنى أن تكون بخير.\nنفتقد تواجدك معنا، ونتطلع لرؤيتك في الاجتماع القادم.\n\nنحن بالفعل نتعافى!"
                 for i in range(0, len(absent_yesterday), 45):
-                    create_draft(notice_subject, notice_body, absent_yesterday[i:i+45], "BCC", is_html=False)
+                    batch = absent_yesterday[i:i+45]
+                    send_bcc_email(notice_subject, notice_body, batch)
+                    time.sleep(3) # 3-second delay to prevent SMTP rate-limiting
 
             # Admin Report for this specific meeting tracking
             admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
                 <h3>✅ تم فحص الحضور لاجتماع ({meeting_name_master}) وتحديث الشيت!</h3>
-                <h4 style="color: #1565c0;">⚠️ أعضاء غابوا أمس وتم تجهيز رسائل لهم ({len(absent_yesterday)}):</h4><ul>{html_list(absent_yesterday)}</ul>
+                <h4 style="color: #1565c0;">⚠️ أعضاء غابوا أمس وتم إرسال رسائل لهم ({len(absent_yesterday)}):</h4><ul>{html_list(absent_yesterday)}</ul>
                 <h4 style="color: #c62828;">⛔ أعضاء تجاوزوا الحد وأصبحوا مُعلقين ({len(suspended_emails)}):</h4><ul>{html_list(suspended_emails)}</ul></div>"""
             send_email(f"📊 تقرير غيابات: {meeting_name_master} - {yesterday_name}", admin_body, ADMIN_EMAILS)
 
