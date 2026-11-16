@@ -90,7 +90,7 @@ st.markdown("""
         user-select: auto !important;
     }
     
-    /* تنسيق نظام القسمين (التبويبات / الزرين في المنتصف) ليصبحوا بحجم كبير وواضح */
+    /* تنسيق نظام القسمين */
     div[data-testid="stTabs"] button {
         font-size: 18px !important;
         font-weight: 800 !important;
@@ -105,7 +105,7 @@ st.markdown("""
         background-color: #f8fafc !important;
     }
 
-    /* الأزرار الأساسية (الخضراء) - للدخول والتحقق */
+    /* الأزرار الأساسية (الخضراء) */
     .stButton button[kind="primary"], .stLinkButton a {
         background-color: #28a745 !important; 
         color: white !important;
@@ -126,7 +126,7 @@ st.markdown("""
         transform: translateY(-2px) !important;
     }
 
-    /* تصميم زر الحذف (الأحمر) لتمييزه بصرياً كإجراء تحذيري */
+    /* تصميم زر الحذف (الأحمر) */
     .stButton button[kind="secondary"] {
         background-color: #dc3545 !important;
         color: white !important;
@@ -186,29 +186,15 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        * {{
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Cairo", sans-serif;
-            user-select: none;
-        }}
-        html, body {{
-            margin: 0; padding: 0; background: transparent; direction: rtl; height: 100%; overflow-y: auto;
-        }}
-        
-        /* Hero Section - الهوامش مضغوطة */
-        .hero-card {{
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            color: white; border-radius: 12px; padding: 15px 18px; margin-bottom: 12px;
-            display: flex; flex-direction: column; gap: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15); min-height: min-content; height: auto;
-        }}
+        * {{ box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Cairo", sans-serif; user-select: none; }}
+        html, body {{ margin: 0; padding: 0; background: transparent; direction: rtl; height: 100%; overflow-y: auto; }}
+        .hero-card {{ background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white; border-radius: 12px; padding: 15px 18px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }}
         .hero-top {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #334155; padding-bottom: 8px; }}
         .hero-title {{ font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 6px; }}
         .status-badge {{ font-size: 12.5px; font-weight: 700; padding: 3px 10px; border-radius: 20px; background-color: #ef4444; color: white; }}
         .status-badge.open {{ background-color: #22c55e; animation: pulse 2s infinite; }}
         .status-badge.rejoin {{ background-color: #3b82f6; }}
         @keyframes pulse {{ 0% {{ box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }} 70% {{ box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }} 100% {{ box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }} }}
-        
         .hero-main {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }}
         .local-time-box {{ display: flex; flex-direction: column; gap: 2px; }}
         .local-time-label {{ font-size: 12.5px; color: #94a3b8; }}
@@ -217,31 +203,19 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
         .schedule-info-box {{ display: flex; flex-direction: column; gap: 2px; text-align: left; }}
         .schedule-info-label {{ font-size: 12.5px; color: #94a3b8; }}
         .schedule-info-value {{ font-size: 15px; font-weight: 600; color: #f8fafc; }}
-
-        /* Clocks Grid - الهوامش مضغوطة */
         .clocks-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }}
         .clock-card {{ background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 6px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }}
         .city-title {{ font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 2px; }}
         .city-time {{ font-size: 14.5px; font-weight: 800; color: #0f766e; letter-spacing: 0.2px; }}
-
-        /* Custom Selector Section - الهوامش مضغوطة */
         .custom-selector-container {{ background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }}
         .select-label {{ font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 6px; display: block; }}
         .city-select {{ width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14.5px; background-color: #f8fafc; color: #1e293b; outline: none; cursor: pointer; }}
-        
         .custom-result-card {{ margin-top: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-right: 4px solid #22c55e; border-radius: 8px; padding: 10px 12px; display: none; }}
         .custom-card-header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #bbf7d0; padding-bottom: 6px; margin-bottom: 6px; }}
         .custom-card-title {{ font-weight: 700; color: #166534; font-size: 14.5px; }}
         .custom-card-time {{ font-weight: 800; color: #15803d; font-size: 15px; direction: ltr; }}
         .custom-schedule-row {{ font-size: 13.5px; color: #14532d; margin-bottom: 3px; }}
-        
-        @media (max-width: 640px) {{
-            .clocks-grid {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }}
-            .hero-main {{ flex-direction: column; align-items: flex-start; }}
-            .schedule-info-box {{ text-align: right; }}
-            .custom-card-header {{ flex-direction: column; align-items: flex-start; gap: 4px; }}
-        }}
-
+        @media (max-width: 640px) {{ .clocks-grid {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }} .hero-main {{ flex-direction: column; align-items: flex-start; }} .schedule-info-box {{ text-align: right; }} .custom-card-header {{ flex-direction: column; align-items: flex-start; gap: 4px; }} }}
         .dst-alert {{ margin-top: 8px; background-color: #fffbeb; border: 1px solid #fde68a; border-right: 4px solid #f59e0b; color: #92400e; padding: 6px 10px; border-radius: 6px; font-size: 12.5px; display: none; }}
     </style>
     </head>
@@ -264,14 +238,12 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
                 </div>
             </div>
         </div>
-
         <div class="clocks-grid">
             <div class="clock-card"><div class="city-title">🇮🇶 بغداد</div><div class="city-time" id="clk-baghdad">--:--:--</div></div>
             <div class="clock-card"><div class="city-title">🇸🇦 الرياض</div><div class="city-time" id="clk-riyadh">--:--:--</div></div>
             <div class="clock-card"><div class="city-title">🇦🇪 دبي</div><div class="city-time" id="clk-dubai">--:--:--</div></div>
             <div class="clock-card"><div class="city-title">🇪🇬 القاهرة</div><div class="city-time" id="clk-cairo">--:--:--</div></div>
         </div>
-
         <div class="custom-selector-container">
             <label class="select-label" for="custom-city-select">🌍 ابحث عن مواعيد البوابة في أي مدينة أخرى:</label>
             <select id="custom-city-select" class="city-select" onchange="updateCustomCityCard()">
@@ -287,90 +259,66 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
                 <div class="dst-alert" id="custom-dst-alert">🔔 <b>تنبيه:</b> ستشهد هذه المدينة تغييراً في الساعة (التوقيت الصيفي/الشتوي) قبل موعد الاجتماع.</div>
             </div>
         </div>
-
         <div class="dst-alert" id="local-dst-alert" style="margin-bottom:10px;">
             🔔 <b>تنبيه (موقعك الحالي):</b> ستشهد منطقتك الزمنية تغييراً في التوقيت الصيفي/الشتوي قبل الاجتماع.
         </div>
-
         <script>
             const DATA = {payload_json};
             const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Baghdad";
             const arabicCity = DATA.cityMap[userTz] || userTz;
             document.getElementById("user-city-name").textContent = "📍 " + arabicCity + " (" + userTz + ")";
-
             const selectEl = document.getElementById("custom-city-select");
             for (const [tz, name] of Object.entries(DATA.cityMap)) {{
                 const opt = document.createElement("option"); opt.value = tz; opt.textContent = name; selectEl.appendChild(opt);
             }}
-
             function formatArabicLiveClock(dateObj, tz) {{
                 const parts = new Intl.DateTimeFormat('en-US', {{timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'}}).formatToParts(dateObj);
                 let h = 0, m = "00", s = "00";
-                for (const p of parts) {{
-                    if (p.type === 'hour') h = parseInt(p.value, 10);
-                    if (p.type === 'minute') m = p.value;
-                    if (p.type === 'second') s = p.value;
-                }}
-                if (h === 24) h = 0;
-                const period = h >= 12 ? "مساءً" : "صباحاً";
-                let h12 = h % 12; if (h12 === 0) h12 = 12;
+                for (const p of parts) {{ if (p.type === 'hour') h = parseInt(p.value, 10); if (p.type === 'minute') m = p.value; if (p.type === 'second') s = p.value; }}
+                if (h === 24) h = 0; const period = h >= 12 ? "مساءً" : "صباحاً"; let h12 = h % 12; if (h12 === 0) h12 = 12;
                 return h12 + ":" + m + ":" + s + " " + period;
             }}
-
             function formatArabicShortTime(ms, tz) {{
-                const d = new Date(ms);
-                const parts = new Intl.DateTimeFormat('en-US', {{timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit'}}).formatToParts(d);
+                const d = new Date(ms); const parts = new Intl.DateTimeFormat('en-US', {{timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit'}}).formatToParts(d);
                 let h = 0, m = "00";
                 for (const p of parts) {{ if (p.type === 'hour') h = parseInt(p.value, 10); if (p.type === 'minute') m = p.value; }}
-                if (h === 24) h = 0;
-                const period = h >= 12 ? "مساءً" : "صباحاً";
-                let h12 = h % 12; if (h12 === 0) h12 = 12;
+                if (h === 24) h = 0; const period = h >= 12 ? "مساءً" : "صباحاً"; let h12 = h % 12; if (h12 === 0) h12 = 12;
                 return h12 + ":" + m + " " + period;
             }}
-
             function getTzOffsetMinutes(dateObj, tz) {{
                 const utcDate = new Date(dateObj.toLocaleString('en-US', {{ timeZone: 'UTC' }}));
                 const tzDate = new Date(dateObj.toLocaleString('en-US', {{ timeZone: tz }}));
                 return Math.round((tzDate - utcDate) / 60000);
             }}
-
             function updateCustomCityCard() {{
-                const selectedTz = selectEl.value;
-                const card = document.getElementById("custom-result-card");
+                const selectedTz = selectEl.value; const card = document.getElementById("custom-result-card");
                 if (!selectedTz) {{ card.style.display = "none"; return; }}
-                
                 card.style.display = "block";
                 document.getElementById("custom-card-title-text").textContent = "📍 " + DATA.cityMap[selectedTz];
                 document.getElementById("custom-sun-times").textContent = "من " + formatArabicShortTime(DATA.sunOpenMs, selectedTz) + " حتى " + formatArabicShortTime(DATA.sunCloseMs, selectedTz);
                 document.getElementById("custom-wed-times").textContent = "من " + formatArabicShortTime(DATA.wedOpenMs, selectedTz) + " حتى " + formatArabicShortTime(DATA.wedCloseMs, selectedTz);
-
                 const nowOffset = getTzOffsetMinutes(new Date(), selectedTz);
                 const sunOffset = getTzOffsetMinutes(new Date(DATA.sunOpenMs), selectedTz);
                 const wedOffset = getTzOffsetMinutes(new Date(DATA.wedOpenMs), selectedTz);
                 document.getElementById("custom-dst-alert").style.display = (nowOffset !== sunOffset || nowOffset !== wedOffset) ? "block" : "none";
                 document.getElementById("clk-custom").textContent = formatArabicLiveClock(new Date(), selectedTz);
             }}
-
             function updateStatusBadge() {{
                 const badge = document.getElementById("gate-status-badge");
                 if (DATA.gateStatus === "OPEN_NEW") {{ badge.className = "status-badge open"; badge.innerHTML = "🟢 البوابة مفتوحة الآن"; }} 
                 else if (DATA.gateStatus === "REJOIN_ONLY") {{ badge.className = "status-badge rejoin"; badge.innerHTML = "🔵 إعادة دخول فقط"; }} 
                 else {{ badge.className = "status-badge"; badge.innerHTML = "⛔ مغلق حالياً"; }}
             }}
-
             function initStaticSchedules() {{
                 const isSunday = DATA.nextMeetingLabel === "الأحد";
                 const openMs = isSunday ? DATA.sunOpenMs : DATA.wedOpenMs;
                 const closeMs = isSunday ? DATA.sunCloseMs : DATA.wedCloseMs;
-
                 document.getElementById("local-open-time").textContent = "🔓 يفتح: " + formatArabicShortTime(openMs, userTz);
                 document.getElementById("local-close-time").textContent = "🔒 يغلق: " + formatArabicShortTime(closeMs, userTz);
-
                 const nowOffset = getTzOffsetMinutes(new Date(), userTz);
                 const openOffset = getTzOffsetMinutes(new Date(openMs), userTz);
                 if (nowOffset !== openOffset) {{ document.getElementById("local-dst-alert").style.display = "block"; }}
             }}
-
             function tickClocks() {{
                 const now = new Date();
                 document.getElementById("clk-baghdad").textContent = formatArabicLiveClock(now, "Asia/Baghdad");
@@ -378,18 +326,15 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
                 document.getElementById("clk-dubai").textContent = formatArabicLiveClock(now, "Asia/Dubai");
                 document.getElementById("clk-cairo").textContent = formatArabicLiveClock(now, "Africa/Cairo");
                 document.getElementById("clk-local").textContent = formatArabicLiveClock(now, userTz);
-                
                 if (selectEl.value) {{ document.getElementById("clk-custom").textContent = formatArabicLiveClock(now, selectEl.value); }}
             }}
-
             updateStatusBadge(); initStaticSchedules(); tickClocks(); setInterval(tickClocks, 1000);
         </script>
     </body>
     </html>
     """
-    
-    # 🌟 تقليص الارتفاع إلى 470 ليلتصق التلميح التقني بالبطاقة مباشرة على اللابتوب
     components.html(html_code, height=470, scrolling=True)
+
 def safe_execute(action_fn, max_retries=3, delay=2.0):
     for attempt in range(max_retries):
         try:
@@ -463,12 +408,8 @@ today_date_str = now.strftime("%Y-%m-%d")
 weekday = now.weekday()
 now_time = now.time()
 
-sun_open_dt, sun_close_dt, sun_end_dt = get_next_meeting_window(
-    now, 6, SUN_OPEN_HOUR, SUN_OPEN_MIN, SUN_CLOSE_HOUR, SUN_CLOSE_MIN, SUN_END_HOUR, SUN_END_MIN
-)
-wed_open_dt, wed_close_dt, wed_end_dt = get_next_meeting_window(
-    now, 2, WED_OPEN_HOUR, WED_OPEN_MIN, WED_CLOSE_HOUR, WED_CLOSE_MIN, WED_END_HOUR, WED_END_MIN
-)
+sun_open_dt, sun_close_dt, sun_end_dt = get_next_meeting_window(now, 6, SUN_OPEN_HOUR, SUN_OPEN_MIN, SUN_CLOSE_HOUR, SUN_CLOSE_MIN, SUN_END_HOUR, SUN_END_MIN)
+wed_open_dt, wed_close_dt, wed_end_dt = get_next_meeting_window(now, 2, WED_OPEN_HOUR, WED_OPEN_MIN, WED_CLOSE_HOUR, WED_CLOSE_MIN, WED_END_HOUR, WED_END_MIN)
 
 if sun_open_dt <= wed_open_dt:
     next_meeting_day_name = "الأحد"
@@ -505,9 +446,7 @@ else:
 # ==========================================
 st.markdown("<h1 style='text-align: center;'>بوابة زمالة الخليج - تسجيل الحضور</h1>", unsafe_allow_html=True)
 
-render_live_clocks_and_local_detector(
-    sun_open_dt, sun_close_dt, wed_open_dt, wed_close_dt, next_meeting_day_name, next_meeting_open_dt, gate_status
-)
+render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_dt, next_meeting_day_name, next_meeting_open_dt, gate_status)
 
 st.markdown("""
 <div style="background-color: #e8f4f8; border-right: 5px solid #17a2b8; padding: 15px; border-radius: 8px; margin-bottom: 20px; direction: rtl; text-align: right;">
@@ -521,7 +460,6 @@ st.markdown("""
 # ==========================================
 # 🔘 نظام تقسيم البوابة إلى قسمين (Tabs)
 # ==========================================
-# تم إلغاء استخدام st.stop() هنا للسماح بخيار "حذف الحساب" بالعمل في كافة الأوقات
 tab_join, tab_delete = st.tabs(["🚀 قسم دخول الاجتماع", "🗑️ قسم حذف الحساب (إلغاء التسجيل)"])
 
 # ------------------------------------------
@@ -535,7 +473,6 @@ with tab_join:
         **الإخوة والأخوات، أعضاء وضيوف زمالة الخليج، تحية طيبة وبعد..**
         
         لضمان بيئة آمنة للتعافي، وحرصاً منا على احترام وقت الجميع وحماية اجتماعاتنا، نضع بين أيديكم دليل استخدام "البوابة الآلية".
-        
         صُمم هذا النظام ليحمي خصوصيتنا التامة؛ فنحن لا نطلب ولا نحفظ أي أسماء أو بيانات شخصية، فقط **"بريدك الإلكتروني"** كمعرف وحيد لك.
         
         ### 📝 خطوات الدخول:
@@ -560,7 +497,6 @@ with tab_join:
         > **وُجد هذا النظام لتطبيق المبادئ قبل الشخصيات، ولحماية قاعاتنا من أي فوضى.**
         """)
         
-    # التحقق من حالة البوابة داخل التبويب الأول فقط
     if gate_status == "CLOSED":
         st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
     else:
@@ -592,8 +528,22 @@ with tab_join:
                 st.error(f"⚠️ لم يتم العثور على إعدادات اجتماع **{selected_meeting}**.")
             else:
                 st.info(f"📌 الاجتماع المحدد: **{selected_meeting}**")
-                
-                # إدخال البريد بقيمة مفتاح مخصصة (key) لمنع التداخل مع قسم الحذف
+
+                # ==========================================
+                # ✨ قسم رابط التسجيل الظاهر (دائم الظهور)
+                # ==========================================
+                st.markdown("""
+                <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; border-right: 5px solid #22c55e; text-align: right; margin-bottom: 10px;">
+                    <h4 style="color: #166534; margin-top: 0; margin-bottom: 8px;">📝 التسجيل لاجتماع الأربعاء</h4>
+                    <p style="color: #14532d; font-size: 15px; margin-bottom: 0;">
+                        إذا لم تكن مسجلاً في اجتماع الأربعاء مسبقاً، يرجى التسجيل عبر الرابط أدناه لتتمكن من دخول القاعة في وقت الاجتماع.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.link_button("✨ رابط التسجيل في اجتماع الأربعاء (Google Form)", WEDNESDAY_REGISTRATION_URL, use_container_width=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+                # ==========================================
+
                 user_email = st.text_input("أدخل البريد الإلكتروني المسجل:", value=st.session_state.get('verified_email', ''), key="join_email_input").strip().lower()
                 
                 if 'verified_email' in st.session_state and user_email != st.session_state['verified_email']:
@@ -613,7 +563,6 @@ with tab_join:
                         btn_text = "التحقق والعودة للاجتماع (Re-join)"
                         
                     if pledge:
-                        # الزر الأخضر (primary)
                         if st.button(btn_text, type="primary", use_container_width=True, key="verify_btn"):
                             if not user_email:
                                 st.warning("يرجى إدخال البريد الإلكتروني.")
@@ -641,7 +590,6 @@ with tab_join:
                                                 st.rerun()
                                             else:
                                                 st.error("❌ عذراً، لم نجد تسجيل حضور لك اليوم قبل إغلاق البوابة.")
-                                                
                                         else:
                                             is_registered = False
                                             cached_emails = get_cached_registered_emails(target_id)
@@ -666,19 +614,10 @@ with tab_join:
                                                     <div style="background-color: #fff8e1; padding: 15px; border-radius: 8px; border-right: 5px solid #ffb300; text-align: right; margin-bottom: 20px;">
                                                         <h4 style="color: #ff8f00; margin-top: 0;">عذراً، البريد الإلكتروني غير مسجل 📝</h4>
                                                         <p style="color: #4e342e; font-size: 16px; margin-bottom: 0;">
-                                                            يبدو أن هذا الإيميل غير موجود في قائمة يوم الأربعاء، لكن يسعدنا جداً انضمامك إلينا!<br><br>
-                                                            <b>⏳ جاري تحويلك تلقائياً إلى صفحة التسجيل...</b>
+                                                            يبدو أن هذا الإيميل غير موجود في قائمة يوم الأربعاء. يرجى التسجيل عبر الرابط الموضح في الأعلى.
                                                         </p>
                                                     </div>
                                                     """, unsafe_allow_html=True)
-                                                    st.link_button("✨ الانتقال لصفحة التسجيل فوراً", WEDNESDAY_REGISTRATION_URL, use_container_width=True)
-                                                    redirect_code = f"""
-                                                    <meta http-equiv="refresh" content="4; url={WEDNESDAY_REGISTRATION_URL}">
-                                                    <script>
-                                                        setTimeout(function() {{ window.top.location.href = "{WEDNESDAY_REGISTRATION_URL}"; }}, 4000);
-                                                    </script>
-                                                    """
-                                                    st.markdown(redirect_code, unsafe_allow_html=True)
                                                 else:
                                                     st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}.")
                                                     
@@ -696,7 +635,6 @@ with tab_join:
                         
                     st.info("💡 اضغط على الزر أدناه للانتقال فوراً إلى قاعة (Zoom).")
                     
-                    # الزر الأخضر (primary)
                     if st.button("🚀 الدخول المباشر للاجتماع", type="primary", use_container_width=True, key="direct_entry_btn"):
                         zoom_link = st.session_state['zoom_link']
                         user_email_to_record = st.session_state['verified_email']
@@ -750,7 +688,6 @@ with tab_delete:
     delete_email = st.text_input("أدخل بريدك الإلكتروني المراد حذفه:", key="delete_email_input").strip().lower()
     confirm_delete = st.checkbox("أؤكد رغبتي الأكيدة في مسح بياناتي نهائياً من سجلات البوابة.", key="confirm_del_chk")
     
-    # 🌟 حاوية فارغة مخصصة لإظهار النافذة المنبثقة (Popup) فوق الشاشة
     overlay_placeholder = st.empty()
     
     if st.button("🗑️ حذف حسابي الآن", type="secondary", use_container_width=True, key="execute_delete_btn"):
@@ -759,22 +696,10 @@ with tab_delete:
         elif not confirm_delete:
             st.error("يرجى تفعيل خيار التأكيد (وضع علامة صح) لتنفيذ الحذف.")
         else:
-            # 1. إظهار شاشة التحميل المنبثقة التي تغلق الشاشة وتمنع النقر
             overlay_placeholder.markdown("""
             <style>
-                .blocking-overlay {
-                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-                    background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(5px);
-                    z-index: 999999; display: flex; flex-direction: column;
-                    justify-content: center; align-items: center;
-                    direction: rtl; font-family: 'Cairo', sans-serif;
-                }
-                .spin-loader {
-                    border: 6px solid #334155; border-top: 6px solid #ef4444;
-                    border-radius: 50%; width: 80px; height: 80px;
-                    animation: spin 1s linear infinite; margin-bottom: 25px;
-                    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
-                }
+                .blocking-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(5px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; direction: rtl; font-family: 'Cairo', sans-serif; }
+                .spin-loader { border: 6px solid #334155; border-top: 6px solid #ef4444; border-radius: 50%; width: 80px; height: 80px; animation: spin 1s linear infinite; margin-bottom: 25px; box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
                 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                 .overlay-title { color: #f8fafc; font-size: 24px; font-weight: 700; margin: 0 0 10px 0; text-align: center; }
                 .overlay-subtitle { color: #94a3b8; font-size: 16px; margin: 0; text-align: center; }
@@ -786,7 +711,6 @@ with tab_delete:
             </div>
             """, unsafe_allow_html=True)
             
-            # 2. تنفيذ كود الحذف في الخلفية
             try:
                 client = get_google_client()
                 deleted_from_any = False
@@ -818,26 +742,16 @@ with tab_delete:
                             continue
                             
                 except Exception as loop_e:
-                    overlay_placeholder.empty() # إخفاء الشاشة المنبثقة عند الخطأ
+                    overlay_placeholder.empty()
                     st.error(f"مشكلة أثناء قراءة السجلات: {loop_e}")
                     
                 if deleted_from_any:
                     get_cached_registered_emails.clear()
                     
-                    # 3. تغيير الشاشة المنبثقة لتظهر علامة النجاح وتأكيد الحذف
                     overlay_placeholder.markdown("""
                     <style>
-                        .blocking-overlay {
-                            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-                            background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(5px);
-                            z-index: 999999; display: flex; flex-direction: column;
-                            justify-content: center; align-items: center;
-                            direction: rtl; font-family: 'Cairo', sans-serif;
-                        }
-                        .success-icon {
-                            font-size: 80px; margin-bottom: 20px;
-                            animation: pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                        }
+                        .blocking-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(5px); z-index: 999999; display: flex; flex-direction: column; justify-content: center; align-items: center; direction: rtl; font-family: 'Cairo', sans-serif; }
+                        .success-icon { font-size: 80px; margin-bottom: 20px; animation: pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
                         @keyframes pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
                         .overlay-title { color: #22c55e; font-size: 26px; font-weight: 700; margin: 0 0 10px 0; text-align: center; }
                         .overlay-subtitle { color: #f8fafc; font-size: 16px; margin: 0; text-align: center; }
@@ -849,12 +763,12 @@ with tab_delete:
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    time.sleep(3.5) # إبقاء رسالة النجاح لثلاث ثوانٍ ونصف
-                    st.rerun() # إعادة تحميل الصفحة تلقائياً
+                    time.sleep(3.5)
+                    st.rerun()
                 else:
-                    overlay_placeholder.empty() # إخفاء الشاشة المنبثقة
+                    overlay_placeholder.empty()
                     st.info("💡 لم نعثر على هذا البريد الإلكتروني في سجلاتنا. قد يكون غير مسجل أو تم حذفه مسبقاً.")
                     
             except Exception as e:
-                overlay_placeholder.empty() # إخفاء الشاشة المنبثقة
+                overlay_placeholder.empty()
                 st.error(f"حدث خطأ أثناء محاولة الاتصال بقاعدة البيانات: {e}")
