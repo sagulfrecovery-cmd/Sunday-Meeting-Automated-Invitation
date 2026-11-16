@@ -70,7 +70,7 @@ def send_bcc_email(subject, text_body, bcc_emails):
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
     msg['From'] = SENDER_EMAIL
-    msg['To'] = SENDER_EMAIL  # Standard practice to prevent spam filters rejecting empty To fields
+    msg['To'] = SENDER_EMAIL
     msg['Bcc'] = ", ".join(bcc_emails)
     msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
     try:
@@ -253,7 +253,6 @@ def run_robot():
             urllib.request.urlopen(req, timeout=15)
         except: pass
 
-        # Loop through all meetings scheduled for today
         for _, meeting_info in today_meetings.iterrows():
             meeting_name_master = str(meeting_info.get('Meeting Name', 'اجتماع غير محدد'))
             target_id = str(meeting_info['Target Sheet ID']).strip()
@@ -268,7 +267,6 @@ def run_robot():
                 send_halt_alert(meeting_name_master, target_id, "لا يمكن الوصول للملف (قد يكون محذوفاً أو غير مصرح به)", "تأكد من وجود الملف وصلاحيات حساب الخدمة (GCP).")
                 continue
 
-            # Strict Check: Registration Sheet
             try:
                 reg_df = pd.DataFrame(target_db.worksheet("Registration").get_all_records())
             except gspread.exceptions.WorksheetNotFound:
@@ -290,7 +288,6 @@ def run_robot():
                 meeting_topic = ""
                 display_date = today_str
                 
-                # --- SUNDAY TEMPLATE STRICT CHECK ---
                 if today_name == "الأحد":
                     try:
                         sun_tab = target_db.worksheet("اجتماع اليوم")
@@ -330,7 +327,6 @@ def run_robot():
                         <a href="{PORTAL_LINK}">{PORTAL_LINK}</a><br><br>
                         بـأنـتـظـار حضوركم !<br>نـحــن بـالـفــعـل نـتـعـافـى 🙏🏼</div>"""
 
-                # --- OTHER DAYS (WEDNESDAY) TEMPLATE STRICT CHECK ---
                 else:
                     try:
                         meet_tab = target_db.worksheet("Meetings")
@@ -368,12 +364,10 @@ def run_robot():
                         <a href="{PORTAL_LINK}">بوابة تسجيل الحضور</a><br><br>
                         نحن بالفعل نتعافى!</div>"""
 
-                # Create Drafts in batches of 45
                 batch_size = 45
                 for i in range(0, len(valid_emails), batch_size):
                     create_draft(f"دعوة زمالة الخليج - {today_str}", body_html, valid_emails[i:i+batch_size], invite_method, is_html=True, static_to="sagulf.recovery@gmail.com")
 
-                # Admin Report for this specific meeting
                 admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
                     <h3>✅ تم تجهيز مسودات دعوات اجتماع ({meeting_name_master}) بنجاح!</h3>
                     <h4 style="color: #2e7d32;">📩 المستلمون للدعوة ({len(valid_emails)}):</h4><ul>{html_list(valid_emails)}</ul>
@@ -390,7 +384,6 @@ def run_robot():
         action_taken = True
         print(f"📅 Today: Tracking absences for yesterday ({yesterday_name}).")
         
-        # Loop through all meetings from yesterday
         for _, meeting_info in yesterday_meetings.iterrows():
             meeting_name_master = str(meeting_info.get('Meeting Name', 'اجتماع غير محدد'))
             target_id = str(meeting_info['Target Sheet ID']).strip()
@@ -400,7 +393,6 @@ def run_robot():
                 target_db = client.open_by_key(target_id)
             except Exception: continue
             
-            # Strict Registration Check
             try:
                 reg_tab = target_db.worksheet("Registration")
                 reg_df = pd.DataFrame(reg_tab.get_all_records())
@@ -408,8 +400,9 @@ def run_robot():
                 send_halt_alert(meeting_name_master, target_id, "شيت التسجيل مفقود أثناء فحص الغيابات.", "مطابقة الاسم مع Registration")
                 continue
                 
-            # Strict Attendance Check for Fail-Fast
             yesterday_attendees = set()
+            all_historical_attendees = set()
+            
             try:
                 check_in_tab = target_db.worksheet("Attendance")
             except gspread.exceptions.WorksheetNotFound:
@@ -417,13 +410,17 @@ def run_robot():
                     check_in_tab = target_db.worksheet("Check-In Log")
                 except gspread.exceptions.WorksheetNotFound:
                     send_halt_alert(meeting_name_master, target_id, "شيت سجل الحضور (Attendance) مفقود.", "إنشاء الشيت أو تسميته بـ Attendance حرفياً لمنع مسح بيانات الأعضاء.")
-                    continue # HALT absence processing!
+                    continue 
             
-            # If safe, process attendance
             check_in_df = pd.DataFrame(check_in_tab.get_all_records())
-            if not check_in_df.empty and 'Timestamp' in check_in_df.columns:
-                raw_attendees = check_in_df[check_in_df['Timestamp'].astype(str).str.contains(yesterday_date_str, na=False)]['Email']
-                yesterday_attendees = set(raw_attendees.str.lower().str.strip().tolist())
+            if not check_in_df.empty:
+                email_col = 'Email' if 'Email' in check_in_df.columns else ('Email Address' if 'Email Address' in check_in_df.columns else None)
+                if email_col:
+                    all_historical_attendees = set(check_in_df[email_col].astype(str).str.lower().str.strip().tolist())
+                    
+                if 'Timestamp' in check_in_df.columns and email_col:
+                    raw_attendees = check_in_df[check_in_df['Timestamp'].astype(str).str.contains(yesterday_date_str, na=False)][email_col]
+                    yesterday_attendees = set(raw_attendees.str.lower().str.strip().tolist())
 
             abs_col_name = 'Absences' if 'Absences' in reg_df.columns else 'الغيابات'
             abs_col_idx = reg_df.columns.get_loc(abs_col_name) + 1
@@ -442,7 +439,11 @@ def run_robot():
                     
                     if email_addr not in yesterday_attendees:
                         new_absences = current_absences + 1
-                        if new_absences < max_abs: absent_yesterday.append(email_addr)
+                        
+                        # SMART FILTER: Only send email if they have attended before
+                        if new_absences < max_abs: 
+                            if email_addr in all_historical_attendees:
+                                absent_yesterday.append(email_addr)
                     elif current_absences > 0:
                         new_absences = 0
                         
@@ -451,19 +452,17 @@ def run_robot():
 
                 reg_tab.update_cells(cells_to_update)
 
-            # Send warnings automatically
             if absent_yesterday:
                 notice_subject = "نفتقدك في زمالة الخليج"
                 notice_body = f"مرحباً،\n\nلاحظنا عدم حضورك لاجتماعنا أمس ({yesterday_name})، ونتمنى أن تكون بخير.\nنفتقد تواجدك معنا، ونتطلع لرؤيتك في الاجتماع القادم.\n\nنحن بالفعل نتعافى!"
                 for i in range(0, len(absent_yesterday), 45):
                     batch = absent_yesterday[i:i+45]
                     send_bcc_email(notice_subject, notice_body, batch)
-                    time.sleep(3) # 3-second delay to prevent SMTP rate-limiting
+                    time.sleep(3)
 
-            # Admin Report for this specific meeting tracking
             admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
                 <h3>✅ تم فحص الحضور لاجتماع ({meeting_name_master}) وتحديث الشيت!</h3>
-                <h4 style="color: #1565c0;">⚠️ أعضاء غابوا أمس وتم إرسال رسائل لهم ({len(absent_yesterday)}):</h4><ul>{html_list(absent_yesterday)}</ul>
+                <h4 style="color: #1565c0;">⚠️ أعضاء حقيقيون غابوا وتم إرسال رسائل لهم ({len(absent_yesterday)}):</h4><ul>{html_list(absent_yesterday)}</ul>
                 <h4 style="color: #c62828;">⛔ أعضاء تجاوزوا الحد وأصبحوا مُعلقين ({len(suspended_emails)}):</h4><ul>{html_list(suspended_emails)}</ul></div>"""
             send_email(f"📊 تقرير غيابات: {meeting_name_master} - {yesterday_name}", admin_body, ADMIN_EMAILS)
 
