@@ -496,6 +496,21 @@ with tab_join:
         
         > **وُجد هذا النظام لتطبيق المبادئ قبل الشخصيات، ولحماية قاعاتنا من أي فوضى.**
         """)
+
+    # ==========================================
+    # ✨ قسم رابط التسجيل الظاهر (تم نقله ليظهر بشكل دائم طوال الأسبوع)
+    # ==========================================
+    st.markdown("""
+    <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; border-right: 5px solid #22c55e; text-align: right; margin-bottom: 20px;">
+        <h4 style="color: #166534; margin-top: 0; margin-bottom: 8px;">📝 التسجيل لاجتماع الأربعاء</h4>
+        <p style="color: #14532d; font-size: 15px; margin-bottom: 0;">
+            إذا لم تكن مسجلاً في اجتماع الأربعاء مسبقاً، يرجى التسجيل عبر الرابط أدناه لتتمكن من دخول القاعة في وقت الاجتماع.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.link_button("✨ رابط التسجيل في اجتماع الأربعاء (Google Form)", WEDNESDAY_REGISTRATION_URL, use_container_width=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    # ==========================================
         
     if gate_status == "CLOSED":
         st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
@@ -528,21 +543,6 @@ with tab_join:
                 st.error(f"⚠️ لم يتم العثور على إعدادات اجتماع **{selected_meeting}**.")
             else:
                 st.info(f"📌 الاجتماع المحدد: **{selected_meeting}**")
-
-                # ==========================================
-                # ✨ قسم رابط التسجيل الظاهر (دائم الظهور)
-                # ==========================================
-                st.markdown("""
-                <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; border-right: 5px solid #22c55e; text-align: right; margin-bottom: 10px;">
-                    <h4 style="color: #166534; margin-top: 0; margin-bottom: 8px;">📝 التسجيل لاجتماع الأربعاء</h4>
-                    <p style="color: #14532d; font-size: 15px; margin-bottom: 0;">
-                        إذا لم تكن مسجلاً في اجتماع الأربعاء مسبقاً، يرجى التسجيل عبر الرابط أدناه لتتمكن من دخول القاعة في وقت الاجتماع.
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.link_button("✨ رابط التسجيل في اجتماع الأربعاء (Google Form)", WEDNESDAY_REGISTRATION_URL, use_container_width=True)
-                st.markdown("<br>", unsafe_allow_html=True)
-                # ==========================================
 
                 user_email = st.text_input("أدخل البريد الإلكتروني المسجل:", value=st.session_state.get('verified_email', ''), key="join_email_input").strip().lower()
                 
