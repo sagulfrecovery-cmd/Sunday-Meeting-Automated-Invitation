@@ -87,7 +87,6 @@ st.markdown("""
         user-select: auto !important;
     }
     
-    /* تنسيق نظام الأقسام ليتناسب مع 4 أقسام */
     div[data-testid="stTabs"] button {
         font-size: 15px !important;
         font-weight: 800 !important;
@@ -102,7 +101,6 @@ st.markdown("""
         background-color: #f8fafc !important;
     }
 
-    /* الأزرار الأساسية (الخضراء) */
     .stButton button[kind="primary"], .stLinkButton a {
         background-color: #28a745 !important; 
         color: white !important;
@@ -123,7 +121,6 @@ st.markdown("""
         transform: translateY(-2px) !important;
     }
 
-    /* تصميم زر الحذف (الأحمر) */
     .stButton button[kind="secondary"] {
         background-color: #dc3545 !important;
         color: white !important;
@@ -457,7 +454,7 @@ st.markdown("""
 # 🔘 نظام تقسيم البوابة إلى 4 أقسام رئيسية (Tabs)
 # ==========================================
 tab_join, tab_register_sunday, tab_register_wednesday, tab_delete = st.tabs([
-    "🚀 قسم دخول الاجتماع", 
+    "🚀 الدخول للاجتماع", 
     "📝 التسجيل للأحد", 
     "📝 التسجيل للأربعاء",
     "🗑️ مسح الحساب"
@@ -497,7 +494,7 @@ with tab_join:
         
         > **وُجد هذا النظام لتطبيق المبادئ قبل الشخصيات، ولحماية قاعاتنا من أي فوضى.**
         """)
-
+        
     if gate_status == "CLOSED":
         st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
     else:
@@ -596,7 +593,7 @@ with tab_join:
                                                 st.rerun()
                                             else:
                                                 if selected_meeting == "الأربعاء":
-                                                    st.error("❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة الأربعاء. يرجى التحقق من تسجيلك في التبويب المخصص للتسجيل.")
+                                                    st.error("❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة الأربعاء. يرجى التسجيل من خلال تبويب (التسجيل للأربعاء).")
                                                 else:
                                                     st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التحقق من تسجيلك في التبويب المخصص لاجتماع الأحد.")
                                                     
@@ -630,7 +627,8 @@ with tab_join:
                                     except Exception:
                                         attendance_tab = safe_execute(lambda: target_db.sheet1)
                                         
-                                    safe_execute(lambda: attendance_tab.append_row([baghdad_time, user_email_to_record]))
+                                    # [التعديل هنا: إدراج سجل الحضور في السطر الثاني]
+                                    safe_execute(lambda: attendance_tab.insert_row([baghdad_time, user_email_to_record], index=2))
                                     
                                     get_todays_attendees.clear()
                                     st.session_state['today_attendees'].add(user_email_to_record)
@@ -650,7 +648,7 @@ with tab_join:
                         st.link_button("🔗 اضغط هنا لفتح قاعة Zoom يدوياً", zoom_link, use_container_width=True)
 
 # ------------------------------------------
-# 🟢 القسم الثاني: التسجيل لاجتماع الأحد
+# 🟢 القسم الثاني: التسجيل لاجتماع الأحد (نظام الفحص + العهد)
 # ------------------------------------------
 with tab_register_sunday:
     st.markdown("### 📝 التسجيل المسبق لاجتماع الأحد المغلق")
@@ -757,7 +755,9 @@ with tab_register_sunday:
                             sun_reg_tab = safe_execute(lambda: sun_db.worksheet("Registration"))
                             
                             baghdad_time = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
-                            safe_execute(lambda: sun_reg_tab.append_row([baghdad_time, st.session_state['checked_email'], 0]))
+                            
+                            # [التعديل هنا: إدراج العضو الجديد في السطر الثاني لاجتماع الأحد]
+                            safe_execute(lambda: sun_reg_tab.insert_row([baghdad_time, st.session_state['checked_email'], 0], index=2))
                             
                             get_cached_registered_emails.clear()
                             
@@ -848,7 +848,9 @@ with tab_register_wednesday:
                             wed_reg_tab = safe_execute(lambda: wed_db.worksheet("Registration"))
                             
                             baghdad_time = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
-                            safe_execute(lambda: wed_reg_tab.append_row([baghdad_time, st.session_state['wed_checked_email'], 0]))
+                            
+                            # [التعديل هنا: إدراج العضو الجديد في السطر الثاني لاجتماع الأربعاء]
+                            safe_execute(lambda: wed_reg_tab.insert_row([baghdad_time, st.session_state['wed_checked_email'], 0], index=2))
                             
                             get_cached_registered_emails.clear()
                             
