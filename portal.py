@@ -338,6 +338,13 @@ def safe_execute(action_fn, max_retries=3, delay=2.0):
                 continue
             raise e
 
+# دالة ذكية للبحث عن تبويب التسجيل أياً كان اسمه
+def get_registration_tab(target_db):
+    try:
+        return target_db.worksheet("Form_Responses")
+    except Exception:
+        return target_db.worksheet("Registration")
+
 @st.cache_resource
 def get_google_client():
     creds_dict = dict(st.secrets["gcp_service_account"])
@@ -379,7 +386,7 @@ def get_todays_attendees(target_sheet_id, today_date_str):
 def get_cached_registered_emails(target_sheet_id):
     client = get_google_client()
     target_db = safe_execute(lambda: client.open_by_key(target_sheet_id))
-    reg_tab = safe_execute(lambda: target_db.worksheet("Registration"))
+    reg_tab = safe_execute(lambda: get_registration_tab(target_db))
     records = safe_execute(lambda: reg_tab.get_all_records())
     reg_df = pd.DataFrame(records)
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
@@ -387,7 +394,7 @@ def get_cached_registered_emails(target_sheet_id):
 def get_live_registered_emails(target_sheet_id):
     client = get_google_client()
     target_db = safe_execute(lambda: client.open_by_key(target_sheet_id))
-    reg_tab = safe_execute(lambda: target_db.worksheet("Registration"))
+    reg_tab = safe_execute(lambda: get_registration_tab(target_db))
     records = safe_execute(lambda: reg_tab.get_all_records())
     reg_df = pd.DataFrame(records)
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
@@ -627,7 +634,6 @@ with tab_join:
                                     except Exception:
                                         attendance_tab = safe_execute(lambda: target_db.sheet1)
                                         
-                                    # [التعديل هنا: إدراج سجل الحضور في السطر الثاني]
                                     safe_execute(lambda: attendance_tab.insert_row([baghdad_time, user_email_to_record], index=2))
                                     
                                     get_todays_attendees.clear()
@@ -684,7 +690,7 @@ with tab_register_sunday:
                             sun_sheet_id = str(sun_info['Target Sheet ID']).strip()
                             
                             sun_db = safe_execute(lambda: client.open_by_key(sun_sheet_id))
-                            sun_reg_tab = safe_execute(lambda: sun_db.worksheet("Registration"))
+                            sun_reg_tab = safe_execute(lambda: get_registration_tab(sun_db))
                             sun_emails = safe_execute(lambda: sun_reg_tab.col_values(2))
                             sun_emails_clean = [str(e).strip().lower() for e in sun_emails]
                             
@@ -752,12 +758,12 @@ with tab_register_sunday:
                             sun_sheet_id = str(sun_info['Target Sheet ID']).strip()
                             
                             sun_db = safe_execute(lambda: client.open_by_key(sun_sheet_id))
-                            sun_reg_tab = safe_execute(lambda: sun_db.worksheet("Registration"))
+                            sun_reg_tab = safe_execute(lambda: get_registration_tab(sun_db))
                             
                             baghdad_time = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
                             
-                            # [التعديل هنا: إدراج العضو الجديد في السطر الثاني لاجتماع الأحد]
-                            safe_execute(lambda: sun_reg_tab.insert_row([baghdad_time, st.session_state['checked_email'], 0], index=2))
+                            # تعبئة 4 قيم لضمان تطابق الأعمدة (الصفر ينزل في عمود الغيابات)
+                            safe_execute(lambda: sun_reg_tab.insert_row([baghdad_time, st.session_state['checked_email'], "أتعهد إني بالغ (عبر البوابة)", 0], index=2))
                             
                             get_cached_registered_emails.clear()
                             
@@ -807,7 +813,7 @@ with tab_register_wednesday:
                             wed_sheet_id = str(wed_info['Target Sheet ID']).strip()
                             
                             wed_db = safe_execute(lambda: client.open_by_key(wed_sheet_id))
-                            wed_reg_tab = safe_execute(lambda: wed_db.worksheet("Registration"))
+                            wed_reg_tab = safe_execute(lambda: get_registration_tab(wed_db))
                             wed_emails = safe_execute(lambda: wed_reg_tab.col_values(2))
                             wed_emails_clean = [str(e).strip().lower() for e in wed_emails]
                             
@@ -845,12 +851,12 @@ with tab_register_wednesday:
                             wed_sheet_id = str(wed_info['Target Sheet ID']).strip()
                             
                             wed_db = safe_execute(lambda: client.open_by_key(wed_sheet_id))
-                            wed_reg_tab = safe_execute(lambda: wed_db.worksheet("Registration"))
+                            wed_reg_tab = safe_execute(lambda: get_registration_tab(wed_db))
                             
                             baghdad_time = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
                             
-                            # [التعديل هنا: إدراج العضو الجديد في السطر الثاني لاجتماع الأربعاء]
-                            safe_execute(lambda: wed_reg_tab.insert_row([baghdad_time, st.session_state['wed_checked_email'], 0], index=2))
+                            # تعبئة 4 قيم لضمان تطابق الأعمدة
+                            safe_execute(lambda: wed_reg_tab.insert_row([baghdad_time, st.session_state['wed_checked_email'], "أتعهد إني بالغ (عبر البوابة)", 0], index=2))
                             
                             get_cached_registered_emails.clear()
                             
@@ -918,7 +924,7 @@ with tab_delete:
                             target_id_del = str(meeting_info_del['Target Sheet ID']).strip()
                             
                             target_db_del = safe_execute(lambda: client.open_by_key(target_id_del))
-                            reg_tab_del = safe_execute(lambda: target_db_del.worksheet("Registration"))
+                            reg_tab_del = safe_execute(lambda: get_registration_tab(target_db_del))
                             
                             emails_col = safe_execute(lambda: reg_tab_del.col_values(2))
                             
