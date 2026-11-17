@@ -744,7 +744,7 @@ with tab_register_sunday:
             </div>
             """, unsafe_allow_html=True)
             
-            pledge_4_meetings = st.checkbox("أتعهد بصدق وأمانة تجاه نفسي وتجاه الزمالة، أنني قد أتممت حضور الـ 4 اجتماعات كاملة من البداية للنهاية.", key="pledge_sun_chk")
+            pledge_4_meetings = st.checkbox("أتعهد بصدق وأمانة تجاه نفسي وتجاه الزمالة، أنني قد أتممت حضور الـ 4 اجتماعات كاملة من البداية للنهاية وأنني بالغ قانونيا.", key="pledge_sun_chk")
             
             if st.button("الخطوة 2: تأكيد التسجيل النهائي", type="primary", use_container_width=True, key="btn_confirm_sun"):
                 if not pledge_4_meetings:
