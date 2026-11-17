@@ -90,11 +90,11 @@ st.markdown("""
         user-select: auto !important;
     }
     
-    /* تنسيق نظام القسمين */
+    /* تنسيق نظام الأقسام */
     div[data-testid="stTabs"] button {
-        font-size: 18px !important;
+        font-size: 17px !important;
         font-weight: 800 !important;
-        padding: 12px 20px !important;
+        padding: 12px 15px !important;
         color: #475569 !important;
         border-radius: 8px 8px 0 0 !important;
         transition: 0.3s !important;
@@ -150,7 +150,6 @@ st.markdown("""
 # ==========================================
 # 🔧 Helper Functions
 # ==========================================
-
 def get_next_meeting_window(now_baghdad, target_weekday, open_h, open_m, close_h, close_m, end_h, end_m):
     baghdad_tz = pytz.timezone("Asia/Baghdad")
     days_ahead = (target_weekday - now_baghdad.weekday()) % 7
@@ -458,9 +457,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🔘 نظام تقسيم البوابة إلى قسمين (Tabs)
+# 🔘 نظام تقسيم البوابة إلى 3 أقسام رئيسية وواضحة (Tabs)
 # ==========================================
-tab_join, tab_delete = st.tabs(["🚀 قسم دخول الاجتماع", "🗑️ قسم حذف الحساب (إلغاء التسجيل)"])
+tab_join, tab_register_sunday, tab_delete = st.tabs([
+    "🚀 قسم دخول الاجتماع", 
+    "📝 التسجيل لاجتماع الأحد", 
+    "🗑️ قسم حذف الحساب"
+])
 
 # ------------------------------------------
 # 🟢 القسم الأول: الدخول للاجتماع
@@ -476,17 +479,17 @@ with tab_join:
         صُمم هذا النظام ليحمي خصوصيتنا التامة؛ فنحن لا نطلب ولا نحفظ أي أسماء أو بيانات شخصية، فقط **"بريدك الإلكتروني"** كمعرف وحيد لك.
         
         ### 📝 خطوات الدخول:
-        * **الرابط:** ادخل عبر الرابط المُرسل إلى بريدك الإلكتروني.
-        * **البريد الإلكتروني:** اكتب إيميلك المسجل لدينا بدقة.
-        * **عهد التعافي:** يُشترط قراءة التعهد بصدق نية الحضور الفعلي.
-        * **الدخول المباشر:** بعد الضغط على "تسجيل الحضور"، سيظهر لك زر أخضر ينقلك مباشرة لقاعة (Zoom).
+        - **الرابط:** ادخل عبر الرابط المُرسل إلى بريدك الإلكتروني.
+        - **البريد الإلكتروني:** اكتب إيميلك المسجل لدينا بدقة.
+        - **عهد التعافي:** يُشترط قراءة التعهد بصدق نية الحضور الفعلي.
+        - **الدخول المباشر:** بعد الضغط على "تسجيل الحضور"، سيظهر لك زر أخضر ينقلك مباشرة لقاعة (Zoom).
         
         ### 🛑 الأمانة في الحضور (تنويه هام جداً):
         نود التوضيح أن منصة (Zoom) تقوم تلقائياً بحفظ سجل دقيق بأسماء جميع الحاضرين ووقت دخولهم؛ لذا فإن آلية مطابقة من **"سجّل في البوابة"** مع من **"تواجد فعلياً في القاعة"** هي عملية بسيطة لدينا. نرجو الحرص على التسجيل فقط عندما تكون مستعداً للدخول الفعلي.
         
         ### ⏰ أوقات البوابة (الالتزام بالوقت):
         النظام مبرمج آلياً ولا يقبل الاستثناءات *(المواعيد تظهر محولة تلقائياً لمدينتك في لوحة الأوقات بالأعلى)*:
-        * **تنبيه حازم:** تُغلق القاعة تماماً بعد 20 دقيقة من البداية. الدخول المبكر يعكس التزامنا الجاد بتعافينا.
+        - **تنبيه حازم:** تُغلق القاعة تماماً بعد 20 دقيقة من البداية. الدخول المبكر يعكس التزامنا الجاد بتعافينا.
         
         ### 🔄 ميزة إعادة الدخول (عند انقطاع الاتصال):
         إذا انقطع عندك الإنترنت، افتح البوابة مرة أخرى وأدخل إيميلك. سيعرف النظام أنك "أثبت حضورك مسبقاً"، وسيعطيك الرابط فوراً.
@@ -497,9 +500,6 @@ with tab_join:
         > **وُجد هذا النظام لتطبيق المبادئ قبل الشخصيات، ولحماية قاعاتنا من أي فوضى.**
         """)
 
-    # ==========================================
-    # ✨ قسم رابط التسجيل الظاهر (تم نقله ليظهر بشكل دائم طوال الأسبوع)
-    # ==========================================
     st.markdown("""
     <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; border-right: 5px solid #22c55e; text-align: right; margin-bottom: 20px;">
         <h4 style="color: #166534; margin-top: 0; margin-bottom: 8px;">📝 التسجيل لاجتماع الأربعاء</h4>
@@ -510,7 +510,6 @@ with tab_join:
     """, unsafe_allow_html=True)
     st.link_button("✨ رابط التسجيل في اجتماع الأربعاء (Google Form)", WEDNESDAY_REGISTRATION_URL, use_container_width=True)
     st.markdown("<br>", unsafe_allow_html=True)
-    # ==========================================
         
     if gate_status == "CLOSED":
         st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
@@ -619,7 +618,7 @@ with tab_join:
                                                     </div>
                                                     """, unsafe_allow_html=True)
                                                 else:
-                                                    st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}.")
+                                                    st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التحقق من تسجيلك في التبويب المخصص لاجتماع الأحد.")
                                                     
                                     except Exception as e:
                                         st.error(f"حدث خطأ: {e}")
@@ -671,7 +670,128 @@ with tab_join:
                         st.link_button("🔗 اضغط هنا لفتح قاعة Zoom يدوياً", zoom_link, use_container_width=True)
 
 # ------------------------------------------
-# 🔴 القسم الثاني: حذف الحساب وإلغاء التسجيل
+# 🟢 القسم الثاني: التسجيل لاجتماع الأحد (نظام الفحص + العهد)
+# ------------------------------------------
+with tab_register_sunday:
+    st.markdown("### 📝 التسجيل المسبق لاجتماع الأحد المغلق")
+    
+    is_active_meeting_time = (gate_status != "CLOSED")
+    
+    if is_active_meeting_time:
+        st.error("⛔ عذراً، خدمة فحص الأهلية والتسجيل مغلقة حالياً.")
+        st.warning("للحفاظ على استقرار النظام وسرعة دخول الأعضاء للقاعة، يتم إيقاف هذه الخدمة تلقائياً أثناء أوقات انعقاد اجتماعات الزمالة. يرجى العودة بعد انتهاء الاجتماع.")
+    else:
+        st.info("💡 للالتحاق باجتماع الأحد، يُشترط حضور 4 اجتماعات يوم الأربعاء خلال آخر 3 أشهر.")
+        
+        new_reg_email = st.text_input("أدخل بريدك الإلكتروني للفحص والتسجيل:", key="reg_sun_input").strip().lower()
+        
+        if 'sun_eligibility_passed' not in st.session_state:
+            st.session_state['sun_eligibility_passed'] = False
+        if 'checked_email' not in st.session_state:
+            st.session_state['checked_email'] = ""
+
+        if new_reg_email != st.session_state['checked_email']:
+            st.session_state['sun_eligibility_passed'] = False
+
+        if not st.session_state['sun_eligibility_passed']:
+            if st.button("🔍 الخطوة 1: فحص الرصيد", type="primary", use_container_width=True, key="btn_check_sun"):
+                if not new_reg_email:
+                    st.warning("يرجى إدخال البريد الإلكتروني أولاً.")
+                else:
+                    with st.spinner("جاري فحص سجلات حضورك..."):
+                        try:
+                            client = get_google_client()
+                            meetings_data_all = get_meetings_data()
+                            sun_info = meetings_data_all[meetings_data_all['Meeting Day'] == "الأحد"].iloc[0]
+                            sun_sheet_id = str(sun_info['Target Sheet ID']).strip()
+                            
+                            sun_db = safe_execute(lambda: client.open_by_key(sun_sheet_id))
+                            sun_reg_tab = safe_execute(lambda: sun_db.worksheet("Registration"))
+                            sun_emails = safe_execute(lambda: sun_reg_tab.col_values(2))
+                            sun_emails_clean = [str(e).strip().lower() for e in sun_emails]
+                            
+                            if new_reg_email in sun_emails_clean:
+                                st.success("✅ أنت مسجل مسبقاً في اجتماع الأحد! يمكنك الدخول مباشرة وقت الاجتماع من القسم الأول.")
+                            else:
+                                wed_info = meetings_data_all[meetings_data_all['Meeting Day'] == "الأربعاء"].iloc[0]
+                                wed_sheet_id = str(wed_info['Target Sheet ID']).strip()
+                                wed_db = safe_execute(lambda: client.open_by_key(wed_sheet_id))
+                                try:
+                                    wed_att_tab = safe_execute(lambda: wed_db.worksheet("Attendance"))
+                                except Exception:
+                                    wed_att_tab = safe_execute(lambda: wed_db.sheet1)
+                                    
+                                wed_records = safe_execute(lambda: wed_att_tab.get_all_records())
+                                wed_df = pd.DataFrame(wed_records)
+                                
+                                if not wed_df.empty and 'Timestamp' in wed_df.columns:
+                                    email_col = 'Email' if 'Email' in wed_df.columns else ('Email Address' if 'Email Address' in wed_df.columns else None)
+                                    if email_col:
+                                        user_att = wed_df[wed_df[email_col].astype(str).str.lower().str.strip() == new_reg_email].copy()
+                                        user_att['Timestamp'] = pd.to_datetime(user_att['Timestamp'], errors='coerce')
+                                        cutoff_date = datetime.now(baghdad_tz).replace(tzinfo=None) - timedelta(days=90)
+                                        recent_att = user_att[user_att['Timestamp'] >= cutoff_date]
+                                        
+                                        unique_days_count = recent_att['Timestamp'].dt.date.nunique()
+                                        
+                                        if unique_days_count >= 4:
+                                            st.session_state['sun_eligibility_passed'] = True
+                                            st.session_state['checked_email'] = new_reg_email
+                                            st.rerun() 
+                                        else:
+                                            meetings_left = 4 - unique_days_count
+                                            st.error(f"⚠️ رصيد حضورك الحالي هو ({unique_days_count}) اجتماعات فقط.")
+                                            st.warning(f"متبقي لك **{meetings_left}** اجتماعات أربعاء لتتمكن من الالتحاق باجتماع الأحد.")
+                                    else:
+                                        st.error("لم نتمكن من تحديد عمود الإيميل في سجلات الأربعاء.")
+                                else:
+                                    st.error("لا توجد سجلات حضور كافية في اجتماع الأربعاء حالياً.")
+                        except Exception as e:
+                            st.error(f"خطأ أثناء الاتصال بقاعدة البيانات: {e}")
+
+        if st.session_state['sun_eligibility_passed']:
+            st.success("✅ أثبتت السجلات حضورك لـ 4 اجتماعات. يرجى إتمام الخطوة الأخيرة:")
+            st.markdown("""
+            <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; border-right: 5px solid #3b82f6; margin-bottom: 20px;">
+                <h4 style="color: #1e3a8a; margin-top: 0;">🤝 عهد التسجيل</h4>
+                <p style="color: #1e40af; font-size: 15px; margin-bottom: 0;">
+                    النظام الآلي أثبت دخولك للاجتماعات، ولكن الأمانة الروحية تقتضي حضورك الفعلي.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            pledge_4_meetings = st.checkbox("أتعهد بصدق وأمانة تجاه نفسي وتجاه الزمالة، أنني قد أتممت حضور الـ 4 اجتماعات كاملة من البداية للنهاية.", key="pledge_sun_chk")
+            
+            if st.button("الخطوة 2: تأكيد التسجيل النهائي", type="primary", use_container_width=True, key="btn_confirm_sun"):
+                if not pledge_4_meetings:
+                    st.info("💡 يرجى وضع علامة (صح) على التعهد لتفعيل زر التسجيل.")
+                else:
+                    with st.spinner("جاري إضافتك لقائمة اجتماع الأحد..."):
+                        try:
+                            client = get_google_client()
+                            meetings_data_all = get_meetings_data()
+                            sun_info = meetings_data_all[meetings_data_all['Meeting Day'] == "الأحد"].iloc[0]
+                            sun_sheet_id = str(sun_info['Target Sheet ID']).strip()
+                            
+                            sun_db = safe_execute(lambda: client.open_by_key(sun_sheet_id))
+                            sun_reg_tab = safe_execute(lambda: sun_db.worksheet("Registration"))
+                            
+                            baghdad_time = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
+                            safe_execute(lambda: sun_reg_tab.append_row([baghdad_time, st.session_state['checked_email'], 0]))
+                            
+                            get_cached_registered_emails.clear()
+                            
+                            st.success("✅ تم تسجيل بريدك الإلكتروني بنجاح في قائمة اجتماع الأحد المغلقة.")
+                            st.balloons()
+                            
+                            st.session_state['sun_eligibility_passed'] = False
+                            st.session_state['checked_email'] = ""
+                            
+                        except Exception as e:
+                            st.error(f"خطأ أثناء إضافة البيانات: {e}")
+
+# ------------------------------------------
+# 🔴 القسم الثالث: حذف الحساب وإلغاء التسجيل
 # ------------------------------------------
 with tab_delete:
     st.markdown("### 🗑️ إلغاء التسجيل نهائياً من الزمالة")
