@@ -14,9 +14,6 @@ import json
 MASTER_SHEET_ID = "1faXF9pNeKu5PrP7d-cwcQrBUd965tGZF3rWtO9s5eLY"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# رابط التسجيل الخاص بيوم الأربعاء
-WEDNESDAY_REGISTRATION_URL = "https://docs.google.com/forms/d/e/1FAIpQLSftm8fJ-knqjrIiZCyYtHcSXgbIgN2hGP8xPU3WJJ1jSnwWhQ/viewform?usp=header"
-
 # ==========================================
 # ⏰ إعدادات أوقات البوابة (توقيت بغداد)
 # ==========================================
@@ -90,11 +87,11 @@ st.markdown("""
         user-select: auto !important;
     }
     
-    /* تنسيق نظام الأقسام */
+    /* تنسيق نظام الأقسام ليتناسب مع 4 أقسام */
     div[data-testid="stTabs"] button {
-        font-size: 17px !important;
+        font-size: 15px !important;
         font-weight: 800 !important;
-        padding: 12px 15px !important;
+        padding: 10px 10px !important;
         color: #475569 !important;
         border-radius: 8px 8px 0 0 !important;
         transition: 0.3s !important;
@@ -109,7 +106,7 @@ st.markdown("""
     .stButton button[kind="primary"], .stLinkButton a {
         background-color: #28a745 !important; 
         color: white !important;
-        font-size: 20px !important;
+        font-size: 18px !important;
         font-weight: bold !important;
         padding: 10px 25px !important;
         border-radius: 8px !important;
@@ -457,12 +454,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🔘 نظام تقسيم البوابة إلى 3 أقسام رئيسية وواضحة (Tabs)
+# 🔘 نظام تقسيم البوابة إلى 4 أقسام رئيسية (Tabs)
 # ==========================================
-tab_join, tab_register_sunday, tab_delete = st.tabs([
+tab_join, tab_register_sunday, tab_register_wednesday, tab_delete = st.tabs([
     "🚀 قسم دخول الاجتماع", 
-    "📝 التسجيل لاجتماع الأحد", 
-    "🗑️ قسم حذف الحساب"
+    "📝 التسجيل للأحد", 
+    "📝 التسجيل للأربعاء",
+    "🗑️ مسح الحساب"
 ])
 
 # ------------------------------------------
@@ -500,17 +498,6 @@ with tab_join:
         > **وُجد هذا النظام لتطبيق المبادئ قبل الشخصيات، ولحماية قاعاتنا من أي فوضى.**
         """)
 
-    st.markdown("""
-    <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; border-right: 5px solid #22c55e; text-align: right; margin-bottom: 20px;">
-        <h4 style="color: #166534; margin-top: 0; margin-bottom: 8px;">📝 التسجيل لاجتماع الأربعاء</h4>
-        <p style="color: #14532d; font-size: 15px; margin-bottom: 0;">
-            إذا لم تكن مسجلاً في اجتماع الأربعاء مسبقاً، يرجى التسجيل عبر الرابط أدناه لتتمكن من دخول القاعة في وقت الاجتماع.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    st.link_button("✨ رابط التسجيل في اجتماع الأربعاء (Google Form)", WEDNESDAY_REGISTRATION_URL, use_container_width=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-        
     if gate_status == "CLOSED":
         st.warning("⛔ عذراً، تسجيل الحضور مغلق حالياً.")
     else:
@@ -609,14 +596,7 @@ with tab_join:
                                                 st.rerun()
                                             else:
                                                 if selected_meeting == "الأربعاء":
-                                                    st.markdown("""
-                                                    <div style="background-color: #fff8e1; padding: 15px; border-radius: 8px; border-right: 5px solid #ffb300; text-align: right; margin-bottom: 20px;">
-                                                        <h4 style="color: #ff8f00; margin-top: 0;">عذراً، البريد الإلكتروني غير مسجل 📝</h4>
-                                                        <p style="color: #4e342e; font-size: 16px; margin-bottom: 0;">
-                                                            يبدو أن هذا الإيميل غير موجود في قائمة يوم الأربعاء. يرجى التسجيل عبر الرابط الموضح في الأعلى.
-                                                        </p>
-                                                    </div>
-                                                    """, unsafe_allow_html=True)
+                                                    st.error("❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة الأربعاء. يرجى التحقق من تسجيلك في التبويب المخصص للتسجيل.")
                                                 else:
                                                     st.error(f"❌ عذراً، بريدك الإلكتروني غير مسجل في قائمة {selected_meeting}. يرجى التحقق من تسجيلك في التبويب المخصص لاجتماع الأحد.")
                                                     
@@ -670,7 +650,7 @@ with tab_join:
                         st.link_button("🔗 اضغط هنا لفتح قاعة Zoom يدوياً", zoom_link, use_container_width=True)
 
 # ------------------------------------------
-# 🟢 القسم الثاني: التسجيل لاجتماع الأحد (نظام الفحص + العهد)
+# 🟢 القسم الثاني: التسجيل لاجتماع الأحد
 # ------------------------------------------
 with tab_register_sunday:
     st.markdown("### 📝 التسجيل المسبق لاجتماع الأحد المغلق")
@@ -791,7 +771,98 @@ with tab_register_sunday:
                             st.error(f"خطأ أثناء إضافة البيانات: {e}")
 
 # ------------------------------------------
-# 🔴 القسم الثالث: حذف الحساب وإلغاء التسجيل
+# 🟢 القسم الثالث: التسجيل لاجتماع الأربعاء
+# ------------------------------------------
+with tab_register_wednesday:
+    st.markdown("### 📝 التسجيل المسبق لاجتماع الأربعاء (الاجتماع المفتوح)")
+    
+    is_active_meeting_time = (gate_status != "CLOSED")
+    
+    if is_active_meeting_time:
+        st.error("⛔ عذراً، خدمة التسجيل مغلقة حالياً.")
+        st.warning("للحفاظ على استقرار النظام وسرعة دخول الأعضاء للقاعة، يتم إيقاف هذه الخدمة تلقائياً أثناء أوقات انعقاد اجتماعات الزمالة. يرجى العودة للتسجيل بعد انتهاء الاجتماع.")
+    else:
+        st.info("💡 اجتماع الأربعاء هو نقطة البداية. تسجيلك هنا يتيح لك حضور الاجتماع وبدء بناء رصيد حضورك.")
+        
+        new_wed_email = st.text_input("أدخل بريدك الإلكتروني للتسجيل في اجتماع الأربعاء:", key="reg_wed_input").strip().lower()
+        
+        if 'wed_ready_to_pledge' not in st.session_state:
+            st.session_state['wed_ready_to_pledge'] = False
+        if 'wed_checked_email' not in st.session_state:
+            st.session_state['wed_checked_email'] = ""
+
+        if new_wed_email != st.session_state['wed_checked_email']:
+            st.session_state['wed_ready_to_pledge'] = False
+
+        if not st.session_state['wed_ready_to_pledge']:
+            if st.button("🔍 الخطوة 1: التحقق من البريد", type="primary", use_container_width=True, key="btn_check_wed"):
+                if not new_wed_email:
+                    st.warning("يرجى إدخال البريد الإلكتروني أولاً.")
+                else:
+                    with st.spinner("جاري التحقق من السجلات..."):
+                        try:
+                            client = get_google_client()
+                            meetings_data_all = get_meetings_data()
+                            wed_info = meetings_data_all[meetings_data_all['Meeting Day'] == "الأربعاء"].iloc[0]
+                            wed_sheet_id = str(wed_info['Target Sheet ID']).strip()
+                            
+                            wed_db = safe_execute(lambda: client.open_by_key(wed_sheet_id))
+                            wed_reg_tab = safe_execute(lambda: wed_db.worksheet("Registration"))
+                            wed_emails = safe_execute(lambda: wed_reg_tab.col_values(2))
+                            wed_emails_clean = [str(e).strip().lower() for e in wed_emails]
+                            
+                            if new_wed_email in wed_emails_clean:
+                                st.success("✅ أنت مسجل مسبقاً في اجتماع الأربعاء! يمكنك الدخول مباشرة وقت الاجتماع من (قسم دخول الاجتماع).")
+                            else:
+                                st.session_state['wed_ready_to_pledge'] = True
+                                st.session_state['wed_checked_email'] = new_wed_email
+                                st.rerun() 
+                        except Exception as e:
+                            st.error(f"خطأ أثناء الاتصال بقاعدة البيانات: {e}")
+
+        if st.session_state['wed_ready_to_pledge']:
+            st.success("✅ بريدك الإلكتروني متاح ومقبول للتسجيل. يرجى إتمام الخطوة الأخيرة:")
+            st.markdown("""
+            <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; border-right: 5px solid #22c55e; margin-bottom: 20px;">
+                <h4 style="color: #166534; margin-top: 0;">🤝 عهد التسجيل</h4>
+                <p style="color: #14532d; font-size: 15px; margin-bottom: 0;">
+                    نتشرف بانضمامك إلينا في زمالة الخليج. حضورك هو تعافيك.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            pledge_wed = st.checkbox("أتعهد بصدق وأمانة تجاه نفسي وتجاه الزمالة، أنني أسجل اليوم بنية الحضور الفعلي للتعافي.", key="pledge_wed_chk")
+            
+            if st.button("الخطوة 2: تأكيد التسجيل النهائي", type="primary", use_container_width=True, key="btn_confirm_wed"):
+                if not pledge_wed:
+                    st.info("💡 يرجى وضع علامة (صح) على التعهد لتفعيل زر التسجيل.")
+                else:
+                    with st.spinner("جاري إضافتك لقائمة اجتماع الأربعاء..."):
+                        try:
+                            client = get_google_client()
+                            meetings_data_all = get_meetings_data()
+                            wed_info = meetings_data_all[meetings_data_all['Meeting Day'] == "الأربعاء"].iloc[0]
+                            wed_sheet_id = str(wed_info['Target Sheet ID']).strip()
+                            
+                            wed_db = safe_execute(lambda: client.open_by_key(wed_sheet_id))
+                            wed_reg_tab = safe_execute(lambda: wed_db.worksheet("Registration"))
+                            
+                            baghdad_time = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
+                            safe_execute(lambda: wed_reg_tab.append_row([baghdad_time, st.session_state['wed_checked_email'], 0]))
+                            
+                            get_cached_registered_emails.clear()
+                            
+                            st.success("✅ تم تسجيل بريدك الإلكتروني بنجاح في قائمة الأربعاء. ننتظرك في الاجتماع القادم!")
+                            st.balloons()
+                            
+                            st.session_state['wed_ready_to_pledge'] = False
+                            st.session_state['wed_checked_email'] = ""
+                            
+                        except Exception as e:
+                            st.error(f"خطأ أثناء إضافة البيانات: {e}")
+
+# ------------------------------------------
+# 🔴 القسم الرابع: حذف الحساب وإلغاء التسجيل
 # ------------------------------------------
 with tab_delete:
     st.markdown("### 🗑️ إلغاء التسجيل نهائياً من الزمالة")
