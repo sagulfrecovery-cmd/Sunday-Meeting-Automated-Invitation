@@ -198,6 +198,8 @@ def run_maintenance(meetings_data):
             
             # Delete inactive members (>90 days & max absences)
             target_info = meetings_data[meetings_data['Target Sheet ID'] == target_id].iloc[0]
+            if str(target_info.get('Meeting Day', '')).strip() == "الأربعاء":
+                continue
             max_abs = int(target_info.get('Max Absences', 4))
             reg_records = reg_tab.get_all_records()
             rows_to_delete = []
@@ -357,11 +359,8 @@ def run_robot():
                         📟 <b>بداية وقت الاجتماع</b><br>
                         <div style="direction: ltr; text-align: right;">{dyn_time_html}</div>
                         <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;">
-                        <b>لحضور الاجتماع، عليك أن تقوم بالخطوتين التاليتين:</b><br><br>
-                        🔗 <b>أولًا: التسجيل لأول مرة فقط:</b><br>
-                        <a href="{form_link}">{form_link}</a><br><br>
-                        🔗 <b>ثانياً: لتسجيل الحضور والحصول على الرابط:</b><br>
-                        <a href="{PORTAL_LINK}">بوابة تسجيل الحضور</a><br><br>
+                        🔗 <b>للتسجيل والحصول على رابط الدخول، يرجى استخدام بوابة زمالة الخليج:</b><br>
+                        <a href="{PORTAL_LINK}">{PORTAL_LINK}</a><br><br>
                         نحن بالفعل نتعافى!</div>"""
 
                 batch_size = 45
@@ -425,7 +424,7 @@ def run_robot():
             abs_col_name = 'Absences' if 'Absences' in reg_df.columns else 'الغيابات'
             abs_col_idx = reg_df.columns.get_loc(abs_col_name) + 1
 
-            absent_yesterday, suspended_emails = [], []
+            absent_yesterday, suspended_emails, deleted_wednesday_emails, wed_rows_to_delete = [], [], [], []
             num_rows = len(reg_df)
             
             if num_rows > 0:
@@ -448,9 +447,26 @@ def run_robot():
                         new_absences = 0
                         
                     cells_to_update[index].value = new_absences
-                    if new_absences >= max_abs: suspended_emails.append(email_addr)
+                    if new_absences >= max_abs:
+                        suspended_emails.append(email_addr)
+                        if yesterday_name == "الأربعاء":
+                            deleted_wednesday_emails.append(email_addr)
+                            wed_rows_to_delete.append(index + 2)
 
                 reg_tab.update_cells(cells_to_update)
+
+                if yesterday_name == "الأربعاء" and wed_rows_to_delete:
+                    for row_num in sorted(list(set(wed_rows_to_delete)), reverse=True):
+                        reg_tab.delete_rows(row_num)
+                        time.sleep(1.5)
+
+            if yesterday_name == "الأربعاء" and deleted_wednesday_emails:
+                removed_subject = "تنبيه بخصوص الغيابات - زمالة الخليج"
+                removed_body = f"نظرا لتجاوز الحد الاقصى للغيابات لن يتم ارسال الدعوات لك مستقبلا وقد تم حذف ايميلك من السجلات. تستطيع استلام الدعوات عن طريق اعادة التسجيل في اجتماع الخليج من بوابة الخليج: {PORTAL_LINK}"
+                for i in range(0, len(deleted_wednesday_emails), 45):
+                    batch = deleted_wednesday_emails[i:i+45]
+                    send_bcc_email(removed_subject, removed_body, batch)
+                    time.sleep(3)
 
             if absent_yesterday:
                 notice_subject = "نفتقدك في زمالة الخليج"
@@ -460,10 +476,12 @@ def run_robot():
                     send_bcc_email(notice_subject, notice_body, batch)
                     time.sleep(3)
 
+            deleted_html = f"<h4 style=\"color: #b71c1c;\">🗑️ أعضاء تم حذفهم وإرسال إشعار لهم ({len(deleted_wednesday_emails)}):</h4><ul>{html_list(deleted_wednesday_emails)}</ul>" if yesterday_name == "الأربعاء" else ""
             admin_body = f"""<div dir="rtl" style="font-family: Arial; font-size: 15px; line-height: 1.6;">
                 <h3>✅ تم فحص الحضور لاجتماع ({meeting_name_master}) وتحديث الشيت!</h3>
                 <h4 style="color: #1565c0;">⚠️ أعضاء حقيقيون غابوا وتم إرسال رسائل لهم ({len(absent_yesterday)}):</h4><ul>{html_list(absent_yesterday)}</ul>
-                <h4 style="color: #c62828;">⛔ أعضاء تجاوزوا الحد وأصبحوا مُعلقين ({len(suspended_emails)}):</h4><ul>{html_list(suspended_emails)}</ul></div>"""
+                <h4 style="color: #c62828;">⛔ أعضاء تجاوزوا الحد وأصبحوا مُعلقين ({len(suspended_emails)}):</h4><ul>{html_list(suspended_emails)}</ul>
+                {deleted_html}</div>"""
             send_email(f"📊 تقرير غيابات: {meeting_name_master} - {yesterday_name}", admin_body, ADMIN_EMAILS)
 
     # ==========================================
