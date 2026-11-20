@@ -158,6 +158,7 @@ def get_next_meeting_window(now_baghdad, target_weekday, open_h, open_m, close_h
     close_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(close_h, close_m)))
     return open_dt, close_dt, end_dt
 
+
 def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_dt, next_meeting_label, next_meeting_dt, gate_status):
     payload = {
         "sunOpenMs": int(sun_open_dt.timestamp() * 1000),
@@ -328,6 +329,7 @@ def render_live_clocks_and_local_detector(sun_open_dt, sun_close_dt, wed_open_dt
     """
     components.html(html_code, height=470, scrolling=True)
 
+
 def safe_execute(action_fn, max_retries=3, delay=2.0):
     for attempt in range(max_retries):
         try:
@@ -338,6 +340,7 @@ def safe_execute(action_fn, max_retries=3, delay=2.0):
                 continue
             raise e
 
+
 @st.cache_resource
 def get_google_client():
     creds_dict = dict(st.secrets["gcp_service_account"])
@@ -346,11 +349,13 @@ def get_google_client():
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.Client(auth=creds)
 
+
 @st.cache_data(ttl=3600)
 def get_meetings_data():
     client = get_google_client()
     master_sheet = safe_execute(lambda: client.open_by_key(MASTER_SHEET_ID).sheet1)
     return pd.DataFrame(safe_execute(lambda: master_sheet.get_all_records()))
+
 
 @st.cache_data(ttl=60)
 def get_todays_attendees(target_sheet_id, today_date_str):
@@ -375,6 +380,7 @@ def get_todays_attendees(target_sheet_id, today_date_str):
     except Exception:
         return set()
 
+
 @st.cache_data(ttl=600) 
 def get_cached_registered_emails(target_sheet_id):
     client = get_google_client()
@@ -382,7 +388,10 @@ def get_cached_registered_emails(target_sheet_id):
     reg_tab = safe_execute(lambda: target_db.worksheet("Registration"))
     records = safe_execute(lambda: reg_tab.get_all_records())
     reg_df = pd.DataFrame(records)
+    if reg_df.empty or reg_df.shape[1] < 2:
+        return []
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
+
 
 def get_live_registered_emails(target_sheet_id):
     client = get_google_client()
@@ -390,7 +399,10 @@ def get_live_registered_emails(target_sheet_id):
     reg_tab = safe_execute(lambda: target_db.worksheet("Registration"))
     records = safe_execute(lambda: reg_tab.get_all_records())
     reg_df = pd.DataFrame(records)
+    if reg_df.empty or reg_df.shape[1] < 2:
+        return []
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
+
 
 # ==========================================
 # ⏰ تحديد حالة البوابة
@@ -685,7 +697,7 @@ with tab_register_sunday:
                             sun_db = safe_execute(lambda: client.open_by_key(sun_sheet_id))
                             sun_reg_tab = safe_execute(lambda: sun_db.worksheet("Registration"))
                             sun_emails = safe_execute(lambda: sun_reg_tab.col_values(2))
-                            sun_emails_clean = [str(e).strip().lower() for e in sun_emails]
+                            sun_emails_clean = [str(e).strip().lower() for e in sun_emails[1:]]
                             
                             if new_reg_email in sun_emails_clean:
                                 st.success("✅ أنت مسجل مسبقاً في اجتماع الأحد! يمكنك الدخول مباشرة وقت الاجتماع من القسم الأول.")
@@ -807,7 +819,7 @@ with tab_register_wednesday:
                             wed_db = safe_execute(lambda: client.open_by_key(wed_sheet_id))
                             wed_reg_tab = safe_execute(lambda: wed_db.worksheet("Registration"))
                             wed_emails = safe_execute(lambda: wed_reg_tab.col_values(2))
-                            wed_emails_clean = [str(e).strip().lower() for e in wed_emails]
+                            wed_emails_clean = [str(e).strip().lower() for e in wed_emails[1:]]
                             
                             if new_wed_email in wed_emails_clean:
                                 st.success("✅ أنت مسجل مسبقاً في اجتماع الأربعاء! يمكنك الدخول مباشرة وقت الاجتماع من (قسم دخول الاجتماع).")
@@ -861,7 +873,7 @@ with tab_register_wednesday:
                             st.error(f"خطأ أثناء إضافة البيانات: {e}")
 
 # ------------------------------------------
-# 🔴 القسم الرابع: حذف الحساب وإلغاء التسجيل
+# 🔴 القسم الرابع: حذف الحساب وإلغاء التسجيل (بدون OTP + حذف جميع الصفوف المطابقة)
 # ------------------------------------------
 with tab_delete:
     st.markdown("### 🗑️ إلغاء التسجيل نهائياً من الزمالة")
@@ -914,19 +926,19 @@ with tab_delete:
                             meeting_info_del = meetings_data_del[meetings_data_del['Meeting Day'] == meeting_day].iloc[0]
                             target_id_del = str(meeting_info_del['Target Sheet ID']).strip()
                             
-                            target_db_del = safe_execute(lambda: client.open_by_key(target_id_del))
-                            reg_tab_del = safe_execute(lambda: target_db_del.worksheet("Registration"))
+                            target_db_del = safe_execute(lambda tid=target_id_del: client.open_by_key(tid))
+                            reg_tab_del = safe_execute(lambda d=target_db_del: d.worksheet("Registration"))
                             
-                            emails_col = safe_execute(lambda: reg_tab_del.col_values(2))
+                            emails_col = safe_execute(lambda t=reg_tab_del: t.col_values(2))
                             
-                            row_to_delete = None
-                            for idx, val in enumerate(emails_col):
-                                if val.strip().lower() == delete_email:
-                                    row_to_delete = idx + 1 
-                                    break
-                                    
-                            if row_to_delete:
-                                safe_execute(lambda: reg_tab_del.delete_rows(row_to_delete))
+                            # جمع كل الصفوف المطابقة مع تجاوز صف العناوين (Row 1) وحذفها من الأسفل للأعلى
+                            rows_to_delete = [
+                                idx for idx, val in enumerate(emails_col[1:], start=2)
+                                if str(val).strip().lower() == delete_email
+                            ]
+                            
+                            for row_num in reversed(rows_to_delete):
+                                safe_execute(lambda t=reg_tab_del, r=row_num: t.delete_rows(r))
                                 deleted_from_any = True
                         except Exception:
                             continue
