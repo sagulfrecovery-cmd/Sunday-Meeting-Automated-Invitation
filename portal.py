@@ -404,6 +404,47 @@ def get_live_registered_emails(target_sheet_id):
     return reg_df.iloc[:, 1].astype(str).str.lower().str.strip().tolist()
 
 
+def get_latest_sunday_removal(sun_db, email_to_check):
+    """إرجاع أحدث تاريخ حذف للعضو من تبويب Removal Log في شيت الأحد (أو None)"""
+    try:
+        log_tab = safe_execute(lambda: sun_db.worksheet("Removal Log"))
+        rows = safe_execute(lambda: log_tab.get_all_values())
+        if not rows or len(rows) < 2:
+            return None
+        latest_dt = None
+        for row in rows[1:]:
+            if len(row) >= 2 and str(row[1]).strip().lower() == email_to_check:
+                ts = pd.to_datetime(str(row[0]).strip(), errors="coerce")
+                if pd.notna(ts):
+                    ts_naive = ts.to_pydatetime().replace(tzinfo=None)
+                    if latest_dt is None or ts_naive > latest_dt:
+                        latest_dt = ts_naive
+        return latest_dt
+    except gspread.exceptions.WorksheetNotFound:
+        return None
+    except Exception:
+        return None
+
+
+def log_sunday_self_removal(sun_db, deleted_email, baghdad_tz):
+    """تسجيل الحذف الذاتي فوراً في تبويب Removal Log بشيت الأحد لمنع الالتفاف خلال فترة الـ 5 دقائق"""
+    try:
+        try:
+            log_tab = safe_execute(lambda: sun_db.worksheet("Removal Log"))
+        except gspread.exceptions.WorksheetNotFound:
+            log_tab = safe_execute(lambda: sun_db.add_worksheet(title="Removal Log", rows=1000, cols=3))
+            safe_execute(lambda: log_tab.update("A1:C1", [["Timestamp", "Email Address", "Source"]]))
+
+        baghdad_ts = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
+        safe_execute(lambda: log_tab.insert_row(
+            [baghdad_ts, deleted_email, "Streamlit Self-Delete"],
+            index=2,
+            value_input_option="RAW"
+        ))
+    except Exception:
+        pass
+
+
 # ==========================================
 # ⏰ تحديد حالة البوابة
 # ==========================================
@@ -659,7 +700,7 @@ with tab_join:
                         st.link_button("🔗 اضغط هنا لفتح قاعة Zoom يدوياً", zoom_link, use_container_width=True)
 
 # ------------------------------------------
-# 🟢 القسم الثاني: التسجيل لاجتماع الأحد (نظام الفحص + العهد)
+# 🟢 القسم الثاني: التسجيل لاجتماع الأحد (فحص التسجيل في الأربعاء + سجل الحذف + 4 اجتماعات)
 # ------------------------------------------
 with tab_register_sunday:
     st.markdown("### 📝 التسجيل المسبق لاجتماع الأحد المغلق")
@@ -670,7 +711,7 @@ with tab_register_sunday:
         st.error("⛔ عذراً، خدمة فحص الأهلية والتسجيل مغلقة حالياً.")
         st.warning("للحفاظ على استقرار النظام وسرعة دخول الأعضاء للقاعة، يتم إيقاف هذه الخدمة تلقائياً أثناء أوقات انعقاد اجتماعات الزمالة. يرجى العودة بعد انتهاء الاجتماع.")
     else:
-        st.info("💡 للالتحاق باجتماع الأحد، يُشترط حضور 4 اجتماعات يوم الأربعاء خلال آخر 3 أشهر.")
+        st.info("💡 للالتحاق باجتماع الأحد، يُشترط أن تكون مسجلاً في اجتماع الأربعاء وحاضراً لـ 4 اجتماعات يوم الأربعاء خلال آخر 3 أشهر (وفي حال الحذف السابق من الأحد، تُحتسب الجلسات بعد تاريخ الحذف فقط).")
         
         new_reg_email = st.text_input("أدخل بريدك الإلكتروني للفحص والتسجيل:", key="reg_sun_input").strip().lower()
         
@@ -702,39 +743,64 @@ with tab_register_sunday:
                             if new_reg_email in sun_emails_clean:
                                 st.success("✅ أنت مسجل مسبقاً في اجتماع الأحد! يمكنك الدخول مباشرة وقت الاجتماع من القسم الأول.")
                             else:
+                                # فحص سجل الحذف السابق من اجتماع الأحد (إن وجد)
+                                latest_removal_dt = get_latest_sunday_removal(sun_db, new_reg_email)
+
                                 wed_info = meetings_data_all[meetings_data_all['Meeting Day'] == "الأربعاء"].iloc[0]
                                 wed_sheet_id = str(wed_info['Target Sheet ID']).strip()
                                 wed_db = safe_execute(lambda: client.open_by_key(wed_sheet_id))
-                                try:
-                                    wed_att_tab = safe_execute(lambda: wed_db.worksheet("Attendance"))
-                                except Exception:
-                                    wed_att_tab = safe_execute(lambda: wed_db.sheet1)
-                                    
-                                wed_records = safe_execute(lambda: wed_att_tab.get_all_records())
-                                wed_df = pd.DataFrame(wed_records)
-                                
-                                if not wed_df.empty and 'Timestamp' in wed_df.columns:
-                                    email_col = 'Email' if 'Email' in wed_df.columns else ('Email Address' if 'Email Address' in wed_df.columns else None)
-                                    if email_col:
-                                        user_att = wed_df[wed_df[email_col].astype(str).str.lower().str.strip() == new_reg_email].copy()
-                                        user_att['Timestamp'] = pd.to_datetime(user_att['Timestamp'], errors='coerce')
-                                        cutoff_date = datetime.now(baghdad_tz).replace(tzinfo=None) - timedelta(days=90)
-                                        recent_att = user_att[user_att['Timestamp'] >= cutoff_date]
-                                        
-                                        unique_days_count = recent_att['Timestamp'].dt.date.nunique()
-                                        
-                                        if unique_days_count >= 4:
-                                            st.session_state['sun_eligibility_passed'] = True
-                                            st.session_state['checked_email'] = new_reg_email
-                                            st.rerun() 
-                                        else:
-                                            meetings_left = 4 - unique_days_count
-                                            st.error(f"⚠️ رصيد حضورك الحالي هو ({unique_days_count}) اجتماعات فقط.")
-                                            st.warning(f"متبقي لك **{meetings_left}** اجتماعات أربعاء لتتمكن من الالتحاق باجتماع الأحد.")
+
+                                # 1. التأكد من أن العضو مسجل حالياً في قائمة اجتماع الأربعاء
+                                wed_reg_tab = safe_execute(lambda: wed_db.worksheet("Registration"))
+                                wed_reg_emails = safe_execute(lambda: wed_reg_tab.col_values(2))
+                                wed_reg_clean = [str(e).strip().lower() for e in wed_reg_emails[1:]]
+
+                                if new_reg_email not in wed_reg_clean:
+                                    st.error("❌ يجب أن تكون مسجلاً في قائمة اجتماع الأربعاء أولاً لتتمكن من التأهل لاجتماع الأحد.")
+                                    if latest_removal_dt is not None:
+                                        st.warning(f"ℹ️ نظراً لإلغاء تسجيلك السابق من اجتماع الأحد بتاريخ ({latest_removal_dt.strftime('%Y-%m-%d')})، يرجى إعادة التسجيل في تبويب (التسجيل للأربعاء) أولاً ثم إتمام حضور 4 اجتماعات أربعاء جديدة.")
                                     else:
-                                        st.error("لم نتمكن من تحديد عمود الإيميل في سجلات الأربعاء.")
+                                        st.info("💡 يرجى التوجه إلى تبويب (التسجيل للأربعاء) أولاً، ثم إتمام حضور 4 اجتماعات أربعاء خلال آخر 3 أشهر.")
                                 else:
-                                    st.error("لا توجد سجلات حضور كافية في اجتماع الأربعاء حالياً.")
+                                    # 2. فحص سجل حضور الأربعاء وفق نقطة البداية الفعّالة: max(اليوم - 90 يوماً, آخر تاريخ حذف من الأحد)
+                                    try:
+                                        wed_att_tab = safe_execute(lambda: wed_db.worksheet("Attendance"))
+                                    except Exception:
+                                        wed_att_tab = safe_execute(lambda: wed_db.sheet1)
+                                        
+                                    wed_records = safe_execute(lambda: wed_att_tab.get_all_records())
+                                    wed_df = pd.DataFrame(wed_records)
+                                    
+                                    if not wed_df.empty and 'Timestamp' in wed_df.columns:
+                                        email_col = 'Email' if 'Email' in wed_df.columns else ('Email Address' if 'Email Address' in wed_df.columns else None)
+                                        if email_col:
+                                            user_att = wed_df[wed_df[email_col].astype(str).str.lower().str.strip() == new_reg_email].copy()
+                                            user_att['Timestamp'] = pd.to_datetime(user_att['Timestamp'], errors='coerce')
+                                            cutoff_90 = datetime.now(baghdad_tz).replace(tzinfo=None) - timedelta(days=90)
+
+                                            if latest_removal_dt is not None and latest_removal_dt > cutoff_90:
+                                                recent_att = user_att[user_att['Timestamp'] > latest_removal_dt]
+                                                counted_from_removal = True
+                                            else:
+                                                recent_att = user_att[user_att['Timestamp'] >= cutoff_90]
+                                                counted_from_removal = False
+                                            
+                                            unique_days_count = recent_att['Timestamp'].dt.date.nunique()
+                                            
+                                            if unique_days_count >= 4:
+                                                st.session_state['sun_eligibility_passed'] = True
+                                                st.session_state['checked_email'] = new_reg_email
+                                                st.rerun() 
+                                            else:
+                                                meetings_left = 4 - unique_days_count
+                                                st.error(f"⚠️ رصيد حضورك المحتسب حالياً هو ({unique_days_count}) اجتماعات فقط.")
+                                                st.warning(f"متبقي لك **{meetings_left}** اجتماعات أربعاء لتتمكن من الالتحاق باجتماع الأحد.")
+                                                if counted_from_removal:
+                                                    st.info(f"ℹ️ نظراً لإلغاء تسجيلك السابق من اجتماع الأحد بتاريخ ({latest_removal_dt.strftime('%Y-%m-%d')})، يتم احتساب اجتماعات الأربعاء التي حضرتها بعد هذا التاريخ فقط.")
+                                        else:
+                                            st.error("لم نتمكن من تحديد عمود الإيميل في سجلات الأربعاء.")
+                                    else:
+                                        st.error("لا توجد سجلات حضور كافية في اجتماع الأربعاء حالياً.")
                         except Exception as e:
                             st.error(f"خطأ أثناء الاتصال بقاعدة البيانات: {e}")
 
@@ -883,12 +949,12 @@ with tab_register_wednesday:
                             st.error(f"خطأ أثناء إضافة البيانات: {e}")
 
 # ------------------------------------------
-# 🔴 القسم الرابع: حذف الحساب وإلغاء التسجيل (بدون OTP + حذف جميع الصفوف المطابقة)
+# 🔴 القسم الرابع: حذف الحساب وإلغاء التسجيل (بدون OTP + حذف شامل + توثيق الحذف من الأحد)
 # ------------------------------------------
 with tab_delete:
     st.markdown("### 🗑️ إلغاء التسجيل نهائياً من الزمالة")
     st.markdown("""
-    <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; border-right: 5px solid #ffc107; text-align: right; margin-bottom: 20px;">
+    <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; border-right: 5px solid #ffc707; text-align: right; margin-bottom: 20px;">
         <h4 style="color: #856404; margin-top: 0;">⚠️ تنبيه هام وإخلاء مسؤولية</h4>
         <p style="color: #856404; font-size: 15px; margin-bottom: 0; line-height: 1.6;">
             استخدامك لهذا الخيار سيؤدي إلى <b>مسح بريدك الإلكتروني بشكل فوري ونهائي</b> من كافة سجلاتنا (قائمة الأحد وقائمة الأربعاء). ولن تتمكن من دخول أي اجتماعات قادمة.
@@ -950,6 +1016,10 @@ with tab_delete:
                             for row_num in reversed(rows_to_delete):
                                 safe_execute(lambda t=reg_tab_del, r=row_num: t.delete_rows(r))
                                 deleted_from_any = True
+
+                            # توثيق الحذف الذاتي فوراً في Removal Log بشيت الأحد
+                            if rows_to_delete and meeting_day == "الأحد":
+                                log_sunday_self_removal(target_db_del, delete_email, baghdad_tz)
                         except Exception:
                             continue
                             
