@@ -749,7 +749,7 @@ with tab_register_sunday:
             </div>
             """, unsafe_allow_html=True)
             
-            pledge_4_meetings = st.checkbox("أتعهد إني بالغ قانونيا حسب قوانين بلدي وأتعهد بصدق وأمانة تجاه نفسي وتجاه الزمالة، أنني قد أتممت حضور الـ 4 اجتماعات كاملة من البداية للنهاية.", key="pledge_sun_chk")
+            pledge_4_meetings = st.checkbox("أتعهد إني بالغ قانونيا حسب قوانين بلد الإقامة وأتعهد بصدق وأمانة تجاه نفسي وتجاه الزمالة، أنني قد أتممت حضور الـ 4 اجتماعات كاملة من البداية للنهاية.", key="pledge_sun_chk")
             
             if st.button("الخطوة 2: تأكيد التسجيل النهائي", type="primary", use_container_width=True, key="btn_confirm_sun"):
                 if not pledge_4_meetings:
@@ -765,9 +765,14 @@ with tab_register_sunday:
                             sun_db = safe_execute(lambda: client.open_by_key(sun_sheet_id))
                             sun_reg_tab = safe_execute(lambda: sun_db.worksheet("Registration"))
                             
-                            baghdad_time = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
+                            now_bg = datetime.now(baghdad_tz)
+                            baghdad_time = f"{now_bg.month}/{now_bg.day}/{now_bg.year} {now_bg.hour}:{now_bg.minute:02d}:{now_bg.second:02d}"
                             
-                            safe_execute(lambda: sun_reg_tab.insert_row([baghdad_time, st.session_state['checked_email'], "أتعهد إني بالغ قانونيا حسب قوانين", 0], index=2))
+                            safe_execute(lambda: sun_reg_tab.insert_row(
+                                [baghdad_time, st.session_state['checked_email'], "أتعهد إني بالغ قانونيا حسب قوانين بلد الإقامة", 0],
+                                index=2,
+                                value_input_option="USER_ENTERED"
+                            ))
                             
                             get_cached_registered_emails.clear()
                             
@@ -841,7 +846,7 @@ with tab_register_wednesday:
             </div>
             """, unsafe_allow_html=True)
             
-            pledge_wed = st.checkbox("أتعهد إني بالغ قانونيا حسب قوانين بلدي وأتعهد بصدق وأمانة تجاه نفسي وتجاه الزمالة، أنني أسجل اليوم بنية الحضور الفعلي للتعافي.", key="pledge_wed_chk")
+            pledge_wed = st.checkbox("أتعهد إني بالغ قانونيا حسب قوانين بلد الإقامة وأتعهد بصدق وأمانة تجاه نفسي وتجاه الزمالة، أنني أسجل اليوم بنية الحضور الفعلي للتعافي.", key="pledge_wed_chk")
             
             if st.button("الخطوة 2: تأكيد التسجيل النهائي", type="primary", use_container_width=True, key="btn_confirm_wed"):
                 if not pledge_wed:
@@ -857,9 +862,14 @@ with tab_register_wednesday:
                             wed_db = safe_execute(lambda: client.open_by_key(wed_sheet_id))
                             wed_reg_tab = safe_execute(lambda: wed_db.worksheet("Registration"))
                             
-                            baghdad_time = datetime.now(baghdad_tz).strftime("%Y-%m-%d %H:%M:%S")
+                            now_bg = datetime.now(baghdad_tz)
+                            baghdad_time = f"{now_bg.month}/{now_bg.day}/{now_bg.year} {now_bg.hour}:{now_bg.minute:02d}:{now_bg.second:02d}"
                             
-                            safe_execute(lambda: wed_reg_tab.insert_row([baghdad_time, st.session_state['wed_checked_email'], "أتعهد إني بالغ قانونيا حسب قوانين", 0], index=2))
+                            safe_execute(lambda: wed_reg_tab.insert_row(
+                                [baghdad_time, st.session_state['wed_checked_email'], "أتعهد إني بالغ قانونيا حسب قوانين بلد الإقامة", 0],
+                                index=2,
+                                value_input_option="USER_ENTERED"
+                            ))
                             
                             get_cached_registered_emails.clear()
                             
