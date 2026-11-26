@@ -94,39 +94,53 @@ st.markdown("""
         padding-bottom: 2rem !important;
     }
 
-    /* تنسيق التبويبات RTL */
+    /* تنسيق التبويبات RTL متوافق مع الوضع الليلي والنهاري */
     div[data-testid="stTabs"] [data-baseweb="tab-list"] {
         direction: rtl !important;
         justify-content: flex-start !important;
         gap: 6px !important;
-        border-bottom: 2px solid #e2e8f0 !important;
+        border-bottom: 2px solid rgba(128, 128, 128, 0.25) !important;
     }
     div[data-testid="stTabs"] button {
         font-size: 14.5px !important;
         font-weight: 800 !important;
         padding: 10px 12px !important;
-        color: #475569 !important;
+        color: var(--text-color) !important;
+        opacity: 0.72 !important;
         border-radius: 8px 8px 0 0 !important;
         transition: 0.2s !important;
     }
     div[data-testid="stTabs"] button[aria-selected="true"] {
-        color: #0f172a !important;
-        border-bottom-color: #2563eb !important;
-        background-color: #f1f5f9 !important;
+        color: var(--text-color) !important;
+        opacity: 1 !important;
+        border-bottom: 3px solid #2563eb !important;
+        background-color: var(--secondary-background-color) !important;
     }
 
-    /* محاذاة مربعات الاختيار (Checkbox) من اليمين */
+    /* محاذاة مربعات الاختيار (Checkbox) بعرض كامل وتباين واضح في كل الأوضاع */
+    div[data-testid="stCheckbox"] {
+        width: 100% !important;
+    }
     div[data-testid="stCheckbox"] label {
         display: flex !important;
         flex-direction: row !important;
         align-items: flex-start !important;
         gap: 10px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
         direction: rtl !important;
         text-align: right !important;
-        background-color: #f8fafc;
-        padding: 12px;
-        border-radius: 8px;
-        border: 1px solid #cbd5e1;
+        background-color: var(--secondary-background-color) !important;
+        color: var(--text-color) !important;
+        padding: 12px 14px !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(128, 128, 128, 0.35) !important;
+    }
+    div[data-testid="stCheckbox"] label p {
+        color: var(--text-color) !important;
+        font-size: 14.5px !important;
+        line-height: 1.6 !important;
+        margin: 0 !important;
     }
 
     /* محاذاة حقول الإدخال */
