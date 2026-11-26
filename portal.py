@@ -68,13 +68,18 @@ st.set_page_config(page_title="بوابة زمالة الخليج", page_icon="�
 
 st.markdown("""
 <style>
-    /* ضبط الاتجاه من اليمين لليسار لكامل الصفحة */
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+    /* ضبط الاتجاه من اليمين لليسار لكامل الصفحة والنوافذ المنبثقة */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"], div[role="dialog"] {
         direction: rtl !important;
         text-align: right !important;
         -webkit-touch-callout: none !important;
         -webkit-user-select: none !important;
         user-select: none !important;
+    }
+
+    div[role="dialog"] header, div[role="dialog"] h2, div[role="dialog"] h3 {
+        direction: rtl !important;
+        text-align: right !important;
     }
 
     input, textarea {
@@ -185,7 +190,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🔧 Helper Functions
+# 🔧 Helper Functions & Modal Popup
 # ==========================================
 def get_next_meeting_window(now_baghdad, target_weekday, open_h, open_m, close_h, close_m, end_h, end_m):
     baghdad_tz = pytz.timezone("Asia/Baghdad")
@@ -200,6 +205,43 @@ def get_next_meeting_window(now_baghdad, target_weekday, open_h, open_m, close_h
     open_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(open_h, open_m)))
     close_dt = baghdad_tz.localize(datetime.combine(candidate_date, dt_time(close_h, close_m)))
     return open_dt, close_dt, end_dt
+
+
+@st.dialog("✅ تم تسجيلك بنجاح — يرجى القراءة والتأكيد")
+def show_registration_popup(popup_data):
+    """نافذة منبثقة تعرض الموعد الثابت بتوقيت بغداد والرياض وطريقة الدخول وتتطلب التأكيد"""
+    popup_html = f"""
+<div style="direction: rtl; text-align: right; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Cairo', sans-serif; color: #0f172a;">
+<div style="background: #f0fdf4; border: 1px solid #86efac; border-right: 4px solid #16a34a; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 13.5px; color: #14532d; line-height: 1.6;">
+🎉 تم حفظ بريدك <span style="direction: ltr; display: inline-block; background: #dcfce7; padding: 1px 6px; border-radius: 4px; font-weight: 700; color: #166534;">{popup_data['email']}</span> في قائمة <b>{popup_data['meetingTitle']}</b>.<br>
+📩 <b>ملاحظة:</b> ستصلك رسالة دعوة عبر الإيميل قبل موعد الجلسة القادمة (يُرجى تفقد البريد الوارد أو الرسائل غير المرغوب فيها Spam).
+</div>
+<div style="background: #eff6ff; border: 1px solid #93c5fd; border-right: 4px solid #2563eb; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
+<div style="font-size: 14.5px; font-weight: 800; color: #1e3a8a; margin-bottom: 5px;">📅 موعد الاجتماع (كل يوم {popup_data['dayName']} — القادم: {popup_data['nextDate']})</div>
+<div style="font-size: 13.5px; color: #1e40af; font-weight: 700; line-height: 1.6;">
+🕒 {popup_data['refTimeText']} بتوقيت <b>بغداد والرياض</b>.<br>
+⚠️ تُغلق قاعة الاجتماع تماماً بعد <b>{ROOM_LOCK_MINUTES} دقيقة</b> من بداية الجلسة.
+</div>
+<div style="font-size: 12.5px; color: #334155; margin-top: 6px; border-top: 1px dashed #93c5fd; padding-top: 6px; line-height: 1.5;">
+🌍 <b>للمقيمين خارج توقيت بغداد والرياض:</b> يُرجى معرفة الموعد المقابل لمدينتك بنفسك من خلال قائمة <b>«مواعيد الاجتماعات في المدن الأخرى»</b> في أعلى البوابة.
+</div>
+</div>
+<div style="background: #f8fafc; border: 1px solid #cbd5e1; border-right: 4px solid #0f172a; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;">
+<div style="font-size: 14.5px; font-weight: 800; color: #0f172a; margin-bottom: 6px;">🚪 كيف تدخل للاجتماع؟</div>
+<ol style="margin: 0; padding-right: 18px; font-size: 13px; color: #334155; line-height: 1.65;">
+<li style="margin-bottom: 4px;">عند حلول وقت الفتح، افتح رابط البوابة (من الإيميل أو احفظه في متصفحك).</li>
+<li style="margin-bottom: 4px;">اختر التبويب الأول <b>«🚪 دخول الاجتماع»</b> وأدخل بريدك الإلكتروني المسجل.</li>
+<li style="margin-bottom: 4px;">ضع علامة (✓) على <b>عهد التعافي</b> واضغط زر الدخول لينقلك مباشرة لقاعة <b>Zoom</b>.</li>
+<li><b>تنويه لمستخدمي الموبايل فقط:</b> إذا فتحت البوابة من داخل تطبيق الإيميل على <b>الموبايل</b> ولم يفتح (Zoom)، اضغط على النقاط الثلاث <b>(⋮)</b> بالأعلى واختر <b>«فتح في المتصفح»</b> واستخدم <b>متصفح جوجل كروم (Chrome) حصراً</b>.</li>
+</ol>
+</div>
+</div>
+"""
+    st.markdown(popup_html, unsafe_allow_html=True)
+
+    if st.button("✅ نعم، قرأت التعليمات وفهمت موعد وطريقة الدخول", type="primary", use_container_width=True, key="ack_reg_popup_btn"):
+        st.session_state.pop("reg_popup_data", None)
+        st.rerun()
 
 
 def render_compact_hero_card(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_dt, next_meeting_label, next_meeting_dt, gate_status):
@@ -242,7 +284,7 @@ def render_compact_hero_card(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_d
         .schedule-info-value {{ font-size: 13.5px; font-weight: 700; color: #f8fafc; }}
         .countdown-bar {{ background: rgba(15, 23, 42, 0.65); border: 1px solid #334155; border-radius: 8px; padding: 6px 10px; text-align: center; font-size: 13px; font-weight: 700; color: #fde047; }}
         .countdown-bar.live {{ color: #4ade80; border-color: #166534; background: rgba(22, 101, 52, 0.25); }}
-        .smart-alert {{ margin-top: 6px; background-color: #fffbeb; border: 1px solid #fde68a; border-right: 4px solid #f59e0b; color: #92400e; padding: 6px 10px; border-radius: 8px; font-size: 12px; display: none; }}
+        .smart-alert {{ margin-top: 6px; background-color: #fffbeb; border: 1px solid #fde68a; border-right: 4px solid #f59e0b; color: #92400e; padding: 6px 10px; border-radius: 8px; font-size: 12px; display: none; line-height: 1.5; }}
         @media (max-width: 540px) {{
             .hero-main {{ flex-direction: column; align-items: stretch; }}
             .schedule-info-box {{ text-align: right; }}
@@ -270,7 +312,7 @@ def render_compact_hero_card(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_d
             <div class="countdown-bar" id="countdown-bar">⏳ جاري حساب الوقت المتبقي...</div>
         </div>
         <div class="smart-alert" id="inapp-browser-alert">
-            💡 <b>تنبيه:</b> يبدو أنك تفتح البوابة من داخل تطبيق الإيميل؛ لفتح Zoom بسلاسة اضغط على <b>(⋮)</b> بالأعلى واختر <b>"فتح في المتصفح"</b>.
+            💡 <b>تنبيه لمستخدمي الموبايل فقط:</b> يبدو أنك تفتح البوابة من داخل تطبيق الإيميل؛ لفتح Zoom بسلاسة اضغط على <b>(⋮)</b> بالأعلى واختر <b>«فتح في المتصفح»</b> واستخدم <b>متصفح جوجل كروم (Chrome) حصراً</b>.
         </div>
         <div class="smart-alert" id="local-dst-alert">
             🔔 <b>تنبيه التوقيت:</b> ستشهد مدينتك تغييراً في الساعة (التوقيت الصيفي/الشتوي) قبل موعد الاجتماع.
@@ -282,9 +324,11 @@ def render_compact_hero_card(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_d
             const arabicCity = DATA.cityMap[userTz] || userTz;
             document.getElementById("user-city-name").textContent = "📍 " + arabicCity;
 
-            // اكتشاف تلقائي للمتصفح الداخلي لتطبيقات الإيميل
+            // اكتشاف تلقائي للمتصفح الداخلي لتطبيقات الإيميل على الموبايل فقط
             const ua = navigator.userAgent || "";
-            if (/FBAN|FBAV|Instagram|Line|MicroMessenger|wv|WebView|GSA|Outlook|Yahoo/i.test(ua)) {{
+            const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+            const isInApp = /FBAN|FBAV|Instagram|Line|MicroMessenger|wv|WebView|GSA|Outlook|Yahoo/i.test(ua);
+            if (isMobile && isInApp) {{
                 document.getElementById("inapp-browser-alert").style.display = "block";
             }}
 
@@ -375,7 +419,7 @@ def render_compact_hero_card(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_d
     </body>
     </html>
     """
-    components.html(html_code, height=235, scrolling=False)
+    components.html(html_code, height=240, scrolling=False)
 
 
 def render_world_clocks_selector(sun_open_dt, sun_close_dt, wed_open_dt, wed_close_dt):
@@ -646,6 +690,12 @@ else:
             gate_status = "REJOIN_ONLY"
 
 # ==========================================
+# 🔔 إظهار النافذة المنبثقة بعد التسجيل (إن وجدت)
+# ==========================================
+if "reg_popup_data" in st.session_state and st.session_state["reg_popup_data"]:
+    show_registration_popup(st.session_state["reg_popup_data"])
+
+# ==========================================
 # 📖 العنوان وبطاقة الوقت المدمجة
 # ==========================================
 st.markdown("<h2 style='text-align: center; margin-bottom: 10px;'>📖 بوابة زمالة الخليج</h2>", unsafe_allow_html=True)
@@ -811,7 +861,7 @@ with tab_join:
                         
                         st.info("⏳ جاري فتح قاعة Zoom، يرجى الانتظار...")
                         st.link_button("🔗 اضغط هنا إذا لم يفتح Zoom تلقائياً", zoom_link, use_container_width=True)
-                        st.caption("💡 ملاحظة: إذا كنت تتصفح من داخل تطبيق الإيميل ولم يفتح Zoom، اختر «فتح في المتصفح» (Chrome) من القائمة العلوية.")
+                        st.caption("💡 ملاحظة لمستخدمي الموبايل فقط: إذا فتحت البوابة من داخل تطبيق الإيميل ولم يفتح Zoom تلقائياً، اضغط (⋮) بالأعلى واختر «فتح في المتصفح» واستخدم متصفح جوجل كروم (Chrome) حصراً.")
 
     st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
     with st.expander("📖 دليل الاستخدام والقواعد التنظيمية (اضغط للقراءة)", expanded=False):
@@ -913,20 +963,26 @@ with tab_register_wednesday:
                             
                             now_bg = datetime.now(baghdad_tz)
                             baghdad_time = f"{now_bg.month}/{now_bg.day}/{now_bg.year} {now_bg.hour}:{now_bg.minute:02d}:{now_bg.second:02d}"
+                            registered_email = st.session_state['wed_checked_email']
                             
                             safe_execute(lambda: wed_reg_tab.insert_row(
-                                [baghdad_time, st.session_state['wed_checked_email'], "أتعهد إني بالغ قانونيا حسب قوانين بلد الإقامة", 0],
+                                [baghdad_time, registered_email, "أتعهد إني بالغ قانونيا حسب قوانين بلد الإقامة", 0],
                                 index=2,
                                 value_input_option="USER_ENTERED"
                             ))
                             
                             get_cached_registered_emails.clear()
                             
-                            st.success("✅ تم تسجيل بريدك الإلكتروني بنجاح في قائمة الأربعاء. ننتظرك في الاجتماع القادم!")
-                            st.balloons()
-                            
                             st.session_state['wed_ready_to_pledge'] = False
                             st.session_state['wed_checked_email'] = ""
+                            st.session_state['reg_popup_data'] = {
+                                "meetingTitle": "اجتماع الأربعاء (المفتوح)",
+                                "dayName": "الأربعاء",
+                                "nextDate": wed_open_dt.strftime("%Y-%m-%d"),
+                                "email": registered_email,
+                                "refTimeText": "تفتح البوابة من 8:15 مساءً حتى 8:50 مساءً (يبدأ الاجتماع الساعة 8:30 مساءً)",
+                            }
+                            st.rerun()
                             
                         except Exception as e:
                             st.error(f"خطأ أثناء إضافة البيانات: {e}")
@@ -1052,20 +1108,26 @@ with tab_register_sunday:
                             
                             now_bg = datetime.now(baghdad_tz)
                             baghdad_time = f"{now_bg.month}/{now_bg.day}/{now_bg.year} {now_bg.hour}:{now_bg.minute:02d}:{now_bg.second:02d}"
+                            registered_email = st.session_state['checked_email']
                             
                             safe_execute(lambda: sun_reg_tab.insert_row(
-                                [baghdad_time, st.session_state['checked_email'], "أتعهد إني بالغ قانونيا حسب قوانين بلد الإقامة", 0],
+                                [baghdad_time, registered_email, "أتعهد إني بالغ قانونيا حسب قوانين بلد الإقامة", 0],
                                 index=2,
                                 value_input_option="USER_ENTERED"
                             ))
                             
                             get_cached_registered_emails.clear()
                             
-                            st.success("✅ تم تسجيل بريدك الإلكتروني بنجاح في قائمة اجتماع الأحد المغلقة.")
-                            st.balloons()
-                            
                             st.session_state['sun_eligibility_passed'] = False
                             st.session_state['checked_email'] = ""
+                            st.session_state['reg_popup_data'] = {
+                                "meetingTitle": "اجتماع الأحد (المغلق)",
+                                "dayName": "الأحد",
+                                "nextDate": sun_open_dt.strftime("%Y-%m-%d"),
+                                "email": registered_email,
+                                "refTimeText": "تفتح البوابة من 8:45 مساءً حتى 9:20 مساءً (يبدأ الاجتماع الساعة 9:00 مساءً)",
+                            }
+                            st.rerun()
                             
                         except Exception as e:
                             st.error(f"خطأ أثناء إضافة البيانات: {e}")
